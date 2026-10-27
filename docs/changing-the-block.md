@@ -24,7 +24,7 @@ shellcheck scripts/*.sh
 | Test file | What it proves |
 |---|---|
 | `subscribe_test.go` | A node in each of the three locations on one network, one API and one ingress load balancer in `fsn1` at their fixed addresses, the ingress address under `fsn1`, no node with user data, only the gateway with a public address, every refusal, the builder's metrics in the build progress and the `image-build-failed` refusal, the cluster's enrolment outputs while it waits on its nodes' report, its `issuerBucket` and `issuerUrl`, checked against the issuer in the machine configuration the builder bakes into the nodes' image, and a cluster whose gateway lacks the issuer label reading unknown |
-| `redrive_test.go` | One subscribe reaching all three nodes through the platform's re-drives, validate asking for one exactly when a subscribe has a step to take, at most one Hetzner action waited and one node created per call, and a doubled re-drive making nothing twice |
+| `redrive_test.go` | One subscribe reaching all three nodes through the platform's re-drives, validate asking for one exactly when a subscribe has a stage to take, at most one Hetzner action waited and one node created per call, and a doubled re-drive making nothing twice |
 | `userdata_test.go` | The builder's embedded configuration with the API load balancer's address in its certificates and the cluster's components, its user data within Hetzner's limit, the gateway's two cloud-config parts, mirror and served manifests, the node report's `checks` member, the object types it read whole with `madeAt` and no right on Secrets, `STATE` and `EPHEMERAL` encrypted under the `nodeID` key and named in the report, and a default cluster's components, mirror and configuration documents against `testdata/default-cluster.golden` |
 | `scripts_test.go` | The build, the first-node bootstrap and the cluster's credential calls |
 | `teardown_test.go` | Unsubscribe deletes every resource, the snapshot included |
@@ -42,7 +42,7 @@ them, and adds its own files after.
 |---|---|
 | `manifest.yaml` | What the block is, the resources it builds, the type it provides and the requests it answers |
 | `main.go` | Starts the operator's web service: `/hook` takes mitstack's requests, `/logs` serves the operator's recent log lines and `/healthz` answers a health check. It reads `MITSTACK_JWKS_URL`, the address where mitstack publishes its signing keys, to check each request |
-| `resource.go` | Reads the params and the Hetzner token, and takes each subscribe step |
+| `resource.go` | Reads the params and the Hetzner token, and takes each subscribe stage |
 | `Dockerfile` | Builds the operator's container image |
 | `go.mod` | The Go module, and the versions of the modules it uses, among them block-kit and talos-cluster-kit |
 | `go.sum` | The checksums of those modules |
