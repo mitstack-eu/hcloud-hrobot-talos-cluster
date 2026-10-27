@@ -16,8 +16,8 @@ mitstack sends a fresh request until the cluster is ready. Every Hetzner
 resource carries the subscription id as a label, so each request finds the
 cluster by its labels alone and needs no memory of the last one.
 
-The operator is a Go program built on the operator kit,
-`github.com/mitstack-eu/operator-kit/v3`. The operator kit is mitstack's Go
+The operator is a Go program built on block-kit,
+`github.com/mitstack-eu/block-kit`. block-kit is mitstack's Go
 library for blocks, and it checks each signed request and answers it.
 
 The nodes run Talos Linux, an operating system that runs only Kubernetes and

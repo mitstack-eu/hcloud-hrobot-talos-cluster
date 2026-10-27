@@ -2,7 +2,7 @@
 #
 # Builds the hcloud-talos-cluster block operator image.
 # Usage: DOCKER_BUILDKIT=1 docker build .
-# The operator-kit and talos-cluster-kit modules are public, so go mod download
+# The block-kit and talos-cluster-kit modules are public, so go mod download
 # fetches them through the Go module proxy with no credential.
 
 FROM golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS build

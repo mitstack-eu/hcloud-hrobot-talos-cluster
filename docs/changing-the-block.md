@@ -28,7 +28,7 @@ shellcheck scripts/*.sh
 | `userdata_test.go` | The builder's embedded configuration with the API load balancer's address in its certificates and the cluster's components, its user data within Hetzner's limit, the gateway's two cloud-config parts, mirror and served manifests, the node report's `checks` member, the object types it read whole with `madeAt` and no right on Secrets, `STATE` and `EPHEMERAL` encrypted under the `nodeID` key and named in the report, and a default cluster's components, mirror and configuration documents against `testdata/default-cluster.golden` |
 | `scripts_test.go` | The build, the first-node bootstrap and the cluster's credential calls |
 | `teardown_test.go` | Unsubscribe deletes every resource, the snapshot included |
-| `declared_resources_test.go`, `secrets_leak_test.go` | The operator kit's block guards and that no token reaches an answer or the logs |
+| `declared_resources_test.go`, `secrets_leak_test.go` | block-kit's block guards and that no token reaches an answer or the logs |
 
 ## Files every block starts with
 
@@ -44,11 +44,11 @@ them, and adds its own files after.
 | `main.go` | Starts the operator's web service: `/hook` takes mitstack's requests, `/logs` serves the operator's recent log lines and `/healthz` answers a health check. It reads `MITSTACK_JWKS_URL`, the address where mitstack publishes its signing keys, to check each request |
 | `resource.go` | Reads the params and the Hetzner token, and takes each subscribe step |
 | `Dockerfile` | Builds the operator's container image |
-| `go.mod` | The Go module, and the versions of the modules it uses, among them the operator kit and talos-cluster-kit |
+| `go.mod` | The Go module, and the versions of the modules it uses, among them block-kit and talos-cluster-kit |
 | `go.sum` | The checksums of those modules |
 | `secrets_leak_test.go` | Proves that no token reaches an answer or the logs |
 | `teardown_test.go` | Proves that unsubscribe deletes every resource, the snapshot included |
-| `.github/` | `workflows/ci.yml`, which this block has in place of the scaffold's `block-verify.yml`. It runs the operator kit's publish workflow, which tests the block and publishes its image on a push to `main`, and runs gitleaks and shellcheck |
+| `.github/` | `workflows/ci.yml`, which this block has in place of the scaffold's `block-verify.yml`. It runs block-kit's publish workflow, which tests the block and publishes its image on a push to `main`, and runs gitleaks and shellcheck |
 
 The scaffold's `resource_test.go`, `verbsemantics_test.go` and
 `types/snapshot.json` are not in this repository. Its copy of the platform's
@@ -81,5 +81,5 @@ type snapshot sits at `testdata/type-snapshot.json` instead.
 | `scripts_test.go` | Runs each script against fake commands |
 | `hetzner_adapter_test.go` | Proves the Hetzner client's requests, such as a node with no user data and no public address |
 | `manifest_test.go` | Proves the manifest's type, server types and description, and that every declared resource has an observer |
-| `declared_resources_test.go` | Runs the operator kit's block guards |
+| `declared_resources_test.go` | Runs block-kit's block guards |
 | `testdata/` | `type-snapshot.json`, the platform's resource types the tests read, and `default-cluster.golden`, a default cluster's expected components |
