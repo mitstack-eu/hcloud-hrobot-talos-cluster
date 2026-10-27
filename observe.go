@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/handler"
 )
 
 // observers judge every declared resource by the labels and topics it carries, never by a recorded identity,

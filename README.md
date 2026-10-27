@@ -1,4 +1,4 @@
-# hcloud-talos-cluster
+# hcloud-hrobot-talos-cluster
 
 Your app's own Kubernetes cluster on Hetzner Cloud, spread over three cities.
 
@@ -8,9 +8,19 @@ inside the cluster, applies what you commit to a GitHub repo the block makes.
 mitstack is a platform that runs ready-made services, called blocks, for your
 apps. [The glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main/docs/glossary.md) defines its other words.
 
+Today this block builds the same cluster as
+[hcloud-talos-cluster](https://github.com/mitstack-eu/hcloud-talos-cluster),
+under its own name: three Hetzner Cloud servers that run Kubernetes itself,
+which is the cluster's control plane, and a gateway server. A future release
+adds Hetzner Robot servers as workers, where your apps run. Robot servers are
+dedicated machines rented by the month, and Cloud servers are virtual ones.
+[ADR 0103](https://github.com/mitstack-eu/mitstack/blob/main/docs/adr/0103-mitstack-offers-five-hetzner-capacity-blocks-and-keeps-the-k3s-block.md)
+decides that mitstack offers this mix as one of its five Hetzner blocks; no
+release date is set.
+
 ```mermaid
 flowchart TD
-    app["Your app in mitstack"] -- "subscribes" --> block["hcloud-talos-cluster"]
+    app["Your app in mitstack"] -- "subscribes" --> block["hcloud-hrobot-talos-cluster"]
     block -- "creates" --> repo["GitHub repo<br/>#lt;appName#gt;-cluster"]
     block -- "creates" --> hetzner
     subgraph hetzner["Hetzner Cloud"]
@@ -54,7 +64,7 @@ block. [Params, connections and outputs](docs/reference.md) has every table.
 
 A cluster takes up to 45 minutes to build, but mitstack waits only two minutes
 for each answer. So the operator, the program in this repository, does one
-small step each time mitstack asks, and mitstack keeps asking until it is done.
+small stage each time mitstack asks, and mitstack keeps asking until it is done.
 
 A short-lived builder server makes the disk image every node starts from. The
 gateway, the only server with a public address, starts etcd, the cluster's
@@ -71,7 +81,7 @@ sequenceDiagram
     You->>M: Subscribe
     rect rgba(80, 140, 255, 0.12)
         Note over M,H: 1. Build the image
-        M->>O: Next step,<br/>each request
+        M->>O: Next stage,<br/>each request
         O->>H: Network, load<br/>balancers
         Note over O: And your<br/>GitHub repo
         O->>H: Builder makes<br/>the image
@@ -95,7 +105,7 @@ the repo too when it carries the two GitHub topics the block set on it.
 │   # Every block starts with these
 ├── manifest.yaml            what the block builds, provides and answers
 ├── main.go                  starts the web service: /hook, /logs, /healthz
-├── resource.go              reads the params and takes each subscribe step
+├── resource.go              reads the params and takes each subscribe stage
 ├── Dockerfile               builds the operator's container image
 ├── go.mod, go.sum           the Go module and its checksums
 ├── secrets_leak_test.go     proves no token reaches an answer or a log
@@ -124,7 +134,7 @@ the repo too when it carries the two GitHub topics the block set on it.
 ## Go deeper
 
 - [Params, connections and outputs](docs/reference.md): every input and output, and when each appears.
-- [How a subscribe runs](docs/how-a-subscribe-runs.md): what it builds, each step, and unsubscribe.
+- [How a subscribe runs](docs/how-a-subscribe-runs.md): what it builds, each stage, and unsubscribe.
 - [Build progress and failures](docs/build-progress-and-failures.md): what a build reports, and every refusal.
 - [Inside the cluster](docs/inside-the-cluster.md): what runs there, the tools image and the logs.
 - [Changing the block](docs/changing-the-block.md): running the tests, and what each file holds.

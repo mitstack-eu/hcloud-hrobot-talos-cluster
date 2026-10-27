@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
+	"github.com/mitstack-eu/block-kit/contract"
 )
 
 // clusterState is every Hetzner resource that carries a subscription's labels, sorted by role.

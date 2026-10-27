@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/handler"
 	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,6 +116,17 @@ func TestSubscribe_NoNodeCarriesUserDataAndOnlyTheGatewayHoldsAPublicAddress(t *
 		lb := e.hetzner.loadBalancer(t, r)
 		wantPublic := r == roleIngress
 		assert.Equal(t, wantPublic, lb.PublicInterface, "load balancer %s's public interface = %v; want %v", lb.Name, lb.PublicInterface, wantPublic)
+	}
+}
+
+func TestSubscribe_EveryServerCarriesThisBlocksLabel(t *testing.T) {
+	e := newEnv(t)
+
+	e.subscribe()
+
+	require.NotEmpty(t, e.hetzner.serverSpecs, "servers created")
+	for _, spec := range e.hetzner.serverSpecs {
+		assert.Equal(t, "hcloud-hrobot-talos-cluster", spec.Labels["mitstack.dev/block"], "server %s's block label", spec.Name)
 	}
 }
 
@@ -424,7 +435,7 @@ func TestSubscribe_CreatesAndMarksTheClusterRepository(t *testing.T) {
 
 	e.subscribe()
 
-	assert.ElementsMatch(t, []string{"mitstack-hcloud-talos-cluster", subscriptionRepoTopic(testSub)}, e.github.topics(e.repo()))
+	assert.ElementsMatch(t, []string{"mitstack-hcloud-hrobot-talos-cluster", subscriptionRepoTopic(testSub)}, e.github.topics(e.repo()))
 	assert.Contains(t, e.github.files, e.repo()+"/contents/"+seedMarkerFile, "the seed")
 }
 

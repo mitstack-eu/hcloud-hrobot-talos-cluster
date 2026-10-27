@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/handler"
-	"github.com/mitstack-eu/operator-kit/v3/webhook"
+	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/block-kit/webhook"
 )
 
 //go:embed manifest.yaml

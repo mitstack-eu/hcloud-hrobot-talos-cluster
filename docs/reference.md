@@ -1,6 +1,6 @@
 # Params, connections and outputs
 
-This page lists everything hcloud-talos-cluster takes and hands back: its
+This page lists everything hcloud-hrobot-talos-cluster takes and hands back: its
 params, its connections, its outputs and the settings its host gives it. It is
 for anyone subscribing an app to the block or wiring another block to it, and
 it assumes no earlier knowledge of mitstack.

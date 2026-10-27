@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
+	"github.com/mitstack-eu/block-kit/handler"
 )
 
 // hetznerAPI is every Hetzner call the block makes; each list takes a label selector, and each delete treats a

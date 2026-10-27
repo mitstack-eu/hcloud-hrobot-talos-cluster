@@ -1,10 +1,10 @@
 # Build progress and failures
 
-This page says what hcloud-talos-cluster reports while the builder makes the
+This page says what hcloud-hrobot-talos-cluster reports while the builder makes the
 cluster's disk image, and every reason a subscribe can be refused. It is for
 anyone watching a subscribe that runs long or reading a refusal.
 [How a subscribe runs](how-a-subscribe-runs.md) explains the builder and the
-steps around it, and
+stages around it, and
 [the workspace glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main/docs/glossary.md)
 defines words such as validate and subscribe.
 

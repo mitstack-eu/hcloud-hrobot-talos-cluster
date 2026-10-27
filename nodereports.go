@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/events"
-	"github.com/mitstack-eu/operator-kit/v3/observe"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/helpers/events"
+	"github.com/mitstack-eu/block-kit/observe"
 )
 
 const operatorEventsPath = "/v1/webhooks/operator-events"

@@ -18,11 +18,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/ghapi"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
-	"github.com/mitstack-eu/operator-kit/v3/observe"
-	"github.com/mitstack-eu/operator-kit/v3/safe"
+	"github.com/mitstack-eu/block-kit/capabilities/github/ghapi"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/block-kit/helpers/safe"
+	"github.com/mitstack-eu/block-kit/observe"
 )
 
 const (

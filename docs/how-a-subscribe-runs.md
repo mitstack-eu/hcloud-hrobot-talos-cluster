@@ -1,6 +1,6 @@
 # How a subscribe runs
 
-This page explains what hcloud-talos-cluster builds when an app subscribes,
+This page explains what hcloud-hrobot-talos-cluster builds when an app subscribes,
 the order it builds it in, and how an unsubscribe takes it down. It is for
 anyone who wants to know what happens in their Hetzner project and GitHub
 account, or who studies the block to build their own. Words such as subscribe,
@@ -8,16 +8,16 @@ operator and resource are defined in
 [the workspace glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main/docs/glossary.md)
 and on [Params, connections and outputs](reference.md).
 
-## Why the operator takes one step per request
+## Why the operator takes one stage per request
 
 mitstack gives each request two minutes, and a cluster takes up to 45 minutes
-to build. The operator therefore builds the cluster one step per request, and
+to build. The operator therefore builds the cluster one stage per request, and
 mitstack sends a fresh request until the cluster is ready. Every Hetzner
 resource carries the subscription id as a label, so each request finds the
 cluster by its labels alone and needs no memory of the last one.
 
-The operator is a Go program built on the operator kit,
-`github.com/mitstack-eu/operator-kit/v3`. The operator kit is mitstack's Go
+The operator is a Go program built on block-kit,
+`github.com/mitstack-eu/block-kit`. block-kit is mitstack's Go
 library for blocks, and it checks each signed request and answers it.
 
 The nodes run Talos Linux, an operating system that runs only Kubernetes and
@@ -85,18 +85,18 @@ operator checks the params and the tokens first, and refuses with a named
 reason when one is missing or wrong, as
 [Params, connections and outputs](reference.md#params) lists.
 
-Each subscribe call then takes one step that waits on Hetzner and then answers
-pending. A step is one change to the cluster and the wait on the Hetzner
+Each subscribe call then takes one stage that waits on Hetzner and then answers
+pending. A stage is one change to the cluster and the wait on the Hetzner
 action that carries it out, such as attaching a load balancer to the network.
 The bound exists because a call that waited on every action of the install ran
 past the platform's two-minute verb timeout. The network and the repository
-need no wait, so a call makes them beside its step. The handler observes each
+need no wait, so a call makes them beside its stage. The handler observes each
 resource once per call, through `VerbBudget: 1` in `main.go`, so no call is held
 open polling either.
 
 While a subscription settles, the platform polls it with validate. The block's
 validate answers `redrive` beside `pending` whenever a subscribe sent now would
-take a step or refuse, judged from what Hetzner and GitHub hold:
+take a stage or refuse, judged from what Hetzner and GitHub hold:
 
 ```json
 {"pending": true, "redrive": true}
@@ -107,8 +107,8 @@ as [ADR 0097](https://github.com/mitstack-eu/mitstack/blob/main/docs/adr/0097-th
 records. While the builder builds, the snapshot images or the node boots,
 validate answers `pending` alone and the platform waits. `stepLeft` in
 `observe.go` makes that judgement from `nextStep` in `resource.go`, the same
-function a subscribe takes its step from, and `Ensure` takes the step. A run
-moves through these steps:
+function a subscribe takes its stage from, and `Ensure` takes the stage. A run
+moves through these stages:
 
 1. Calls create the network, the repository and the firewall. The firewall
    has no rule and is applied to every server, so nothing on the internet can
@@ -173,11 +173,11 @@ expires.
 
 The cluster reads present once every resource is in place and the newest node
 report since the last node's creation names at least three nodes, every one
-Ready. mitstack then records every output. Each step logs how long it took, as
+Ready. mitstack then records every output. Each stage logs how long it took, as
 in this line from the tests:
 
 ```text
-hcloud-talos-cluster: subscription sub_0123456789ab: the step to create the node in nbg1 from the snapshot took 0s
+hcloud-hrobot-talos-cluster: subscription sub_0123456789ab: the step to create the node in nbg1 from the snapshot took 0s
 ```
 
 An upgrade request, which moves a subscription to a newer release of the

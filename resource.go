@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/handler"
 )
 
 // blockResource keeps no state between calls and finds every resource by label, so each Ensure takes the cluster

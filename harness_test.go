@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/events"
-	"github.com/mitstack-eu/operator-kit/v3/ghapi"
-	"github.com/mitstack-eu/operator-kit/v3/handler"
-	"github.com/mitstack-eu/operator-kit/v3/kittest"
-	"github.com/mitstack-eu/operator-kit/v3/observe"
-	"github.com/mitstack-eu/operator-kit/v3/webhook"
+	"github.com/mitstack-eu/block-kit/capabilities/github/ghapi"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/block-kit/helpers/events"
+	"github.com/mitstack-eu/block-kit/observe"
+	"github.com/mitstack-eu/block-kit/verify/kittest"
+	"github.com/mitstack-eu/block-kit/webhook"
 	"github.com/stretchr/testify/require"
 )
 
@@ -883,7 +883,7 @@ func (e *env) engine() *engine {
 	if e.eng != nil {
 		return e.eng
 	}
-	p := &engine{e: e, signer: kittest.NewSigner(e.t, "kid-hcloud-talos-cluster", 41)}
+	p := &engine{e: e, signer: kittest.NewSigner(e.t, "kid-hcloud-hrobot-talos-cluster", 41)}
 	cfg := handlerConfig(p.signer.JWKSServer(e.t), nil)
 	cfg.Resource = e.block
 	cfg.Sleep = func(context.Context, time.Duration) { p.sleeps++ }
@@ -898,7 +898,7 @@ func (p *engine) post(operation string) answer {
 	p.seq++
 	body := hookBody(operation, p.e)
 	obo, err := webhook.MintOBO(p.signer.Private, p.signer.Kid,
-		webhook.OBOClaims{OrgID: body["orgId"].(string), SubscriptionID: testSub}, time.Hour, time.Now())
+		webhook.OBOClaims{Audience: blockID, OrgID: body["orgId"].(string), AppID: body["appId"].(string), SubscriptionID: testSub}, time.Hour, time.Now())
 	require.NoError(p.e.t, err)
 	body["obo"], body["idempotencyKey"] = obo, fmt.Sprintf("%s-%d", operation, p.seq)
 	waits := p.e.hetzner.waits

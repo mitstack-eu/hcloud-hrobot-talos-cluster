@@ -1,6 +1,6 @@
 # Inside the cluster
 
-This page lists what runs inside a cluster hcloud-talos-cluster builds, where
+This page lists what runs inside a cluster hcloud-hrobot-talos-cluster builds, where
 the block's own workloads get their image, and where the logs go. It is for
 anyone who deploys to the cluster or wants to know what it holds before they
 do. [How a subscribe runs](how-a-subscribe-runs.md) explains how the cluster
@@ -63,8 +63,6 @@ boots. Talos's `nodeID` key derives each key from the node's own UUID, and
 every node boots from holds neither volume, so each node formats both under
 keys of its own, and a disk taken from its server yields nothing readable.
 The keys do not protect against whoever holds the Hetzner project's token.
-A cluster subscribed before hcloud-talos-cluster 0.11.0 stays unencrypted until
-it is unsubscribed and subscribed again.
 [talos-cluster-kit's README](https://github.com/mitstack-eu/talos-cluster-kit/blob/v0.12.0/README.md#what-the-configuration-holds)
 gives the details.
 
