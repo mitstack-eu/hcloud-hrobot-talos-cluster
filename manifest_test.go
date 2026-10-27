@@ -51,7 +51,7 @@ func TestManifest_ProvidesTheKubernetesClusterType(t *testing.T) {
 
 	declared, observed := m.declaredTypes(), observers()
 
-	assert.Equal(t, blockID, m.Metadata.ID)
+	assert.Equal(t, "hcloud-hrobot-talos-cluster", m.Metadata.ID)
 	assert.Equal(t, []string{"hetzner.kubernetes-cluster"}, m.Spec.Provides)
 	for name := range declared {
 		assert.Contains(t, observed, name, "the declared resource %s has no observer", name)

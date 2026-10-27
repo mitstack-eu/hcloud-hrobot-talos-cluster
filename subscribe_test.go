@@ -119,6 +119,17 @@ func TestSubscribe_NoNodeCarriesUserDataAndOnlyTheGatewayHoldsAPublicAddress(t *
 	}
 }
 
+func TestSubscribe_EveryServerCarriesThisBlocksLabel(t *testing.T) {
+	e := newEnv(t)
+
+	e.subscribe()
+
+	require.NotEmpty(t, e.hetzner.serverSpecs, "servers created")
+	for _, spec := range e.hetzner.serverSpecs {
+		assert.Equal(t, "hcloud-hrobot-talos-cluster", spec.Labels["mitstack.dev/block"], "server %s's block label", spec.Name)
+	}
+}
+
 func TestSubscribe_FailsOnceTheBuilderStillRunsPastItsDeadline(t *testing.T) {
 	e := newEnv(t)
 	e.buildTakes = 0
@@ -424,7 +435,7 @@ func TestSubscribe_CreatesAndMarksTheClusterRepository(t *testing.T) {
 
 	e.subscribe()
 
-	assert.ElementsMatch(t, []string{"mitstack-hcloud-talos-cluster", subscriptionRepoTopic(testSub)}, e.github.topics(e.repo()))
+	assert.ElementsMatch(t, []string{"mitstack-hcloud-hrobot-talos-cluster", subscriptionRepoTopic(testSub)}, e.github.topics(e.repo()))
 	assert.Contains(t, e.github.files, e.repo()+"/contents/"+seedMarkerFile, "the seed")
 }
 

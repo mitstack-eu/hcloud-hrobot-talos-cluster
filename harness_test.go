@@ -883,7 +883,7 @@ func (e *env) engine() *engine {
 	if e.eng != nil {
 		return e.eng
 	}
-	p := &engine{e: e, signer: kittest.NewSigner(e.t, "kid-hcloud-talos-cluster", 41)}
+	p := &engine{e: e, signer: kittest.NewSigner(e.t, "kid-hcloud-hrobot-talos-cluster", 41)}
 	cfg := handlerConfig(p.signer.JWKSServer(e.t), nil)
 	cfg.Resource = e.block
 	cfg.Sleep = func(context.Context, time.Duration) { p.sleeps++ }

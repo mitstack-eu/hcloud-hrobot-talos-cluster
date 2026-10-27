@@ -45,7 +45,7 @@ func leakingEnv(t *testing.T) (*env, func(*webhook.LogBuffer) (http.Handler, *ki
 func leakServer(t *testing.T, e *env) func(*webhook.LogBuffer) (http.Handler, *kittest.Signer) {
 	t.Helper()
 	return func(logs *webhook.LogBuffer) (http.Handler, *kittest.Signer) {
-		signer := kittest.NewSigner(t, "kid-hcloud-talos-cluster", 41)
+		signer := kittest.NewSigner(t, "kid-hcloud-hrobot-talos-cluster", 41)
 		cfg := handlerConfig(signer.JWKSServer(t), logs)
 		cfg.Resource = e.block
 		cfg.VerbBudget = 3
