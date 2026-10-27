@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mitstack-eu/operator-kit/v3/contract"
-	"github.com/mitstack-eu/operator-kit/v3/kittest"
-	"github.com/mitstack-eu/operator-kit/v3/observe"
+	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/block-kit/observe"
+	"github.com/mitstack-eu/block-kit/verify/kittest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -113,14 +113,13 @@ func blockUnderTest(t *testing.T) kittest.Block {
 	require.NoError(t, err)
 	d := e.desired()
 	d.BlockID, d.OrgID, d.AppID = blockID, "org_0123456789ab", "app_0123456789ab"
+	cfg := handlerConfig("https://api.mitstack.test/.well-known/jwks.json", nil)
+	cfg.Resource, cfg.Types = convergingBlock{blockResource: e.block, e: e}, snap
 	return kittest.Block{
-		Manifest:  manifestYAML,
-		Types:     snap,
-		Handler:   convergingBlock{blockResource: e.block, e: e},
-		Observers: observers(),
-		Provider:  clusterProvider{e: e},
-		Desired:   d,
-		Upgrade:   &d,
+		Config:   cfg,
+		Provider: clusterProvider{e: e},
+		Desired:  d,
+		Upgrade:  &d,
 	}
 }
 
