@@ -1,4 +1,4 @@
-module github.com/mitstack-eu/hcloud-talos-cluster
+module github.com/mitstack-eu/hcloud-hrobot-talos-cluster
 
 go 1.26.10
 

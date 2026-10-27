@@ -1,6 +1,6 @@
 # Build progress and failures
 
-This page says what hcloud-talos-cluster reports while the builder makes the
+This page says what hcloud-hrobot-talos-cluster reports while the builder makes the
 cluster's disk image, and every reason a subscribe can be refused. It is for
 anyone watching a subscribe that runs long or reading a refusal.
 [How a subscribe runs](how-a-subscribe-runs.md) explains the builder and the

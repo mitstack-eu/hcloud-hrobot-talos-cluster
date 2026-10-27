@@ -1,4 +1,4 @@
-# hcloud-talos-cluster
+# hcloud-hrobot-talos-cluster
 
 Your app's own Kubernetes cluster on Hetzner Cloud, spread over three cities.
 
@@ -10,7 +10,7 @@ apps. [The glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main
 
 ```mermaid
 flowchart TD
-    app["Your app in mitstack"] -- "subscribes" --> block["hcloud-talos-cluster"]
+    app["Your app in mitstack"] -- "subscribes" --> block["hcloud-hrobot-talos-cluster"]
     block -- "creates" --> repo["GitHub repo<br/>#lt;appName#gt;-cluster"]
     block -- "creates" --> hetzner
     subgraph hetzner["Hetzner Cloud"]

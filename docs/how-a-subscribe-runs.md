@@ -1,6 +1,6 @@
 # How a subscribe runs
 
-This page explains what hcloud-talos-cluster builds when an app subscribes,
+This page explains what hcloud-hrobot-talos-cluster builds when an app subscribes,
 the order it builds it in, and how an unsubscribe takes it down. It is for
 anyone who wants to know what happens in their Hetzner project and GitHub
 account, or who studies the block to build their own. Words such as subscribe,
@@ -177,7 +177,7 @@ Ready. mitstack then records every output. Each step logs how long it took, as
 in this line from the tests:
 
 ```text
-hcloud-talos-cluster: subscription sub_0123456789ab: the step to create the node in nbg1 from the snapshot took 0s
+hcloud-hrobot-talos-cluster: subscription sub_0123456789ab: the step to create the node in nbg1 from the snapshot took 0s
 ```
 
 An upgrade request, which moves a subscription to a newer release of the

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	blockID = "hcloud-talos-cluster"
+	blockID = "hcloud-hrobot-talos-cluster"
 
 	keyBlock           = "mitstack.dev/block"
 	keySubscription    = "mitstack.dev/subscription"

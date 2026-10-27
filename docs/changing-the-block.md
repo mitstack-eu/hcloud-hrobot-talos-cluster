@@ -1,6 +1,6 @@
 # Changing the block
 
-This page is for anyone who changes hcloud-talos-cluster or studies it to
+This page is for anyone who changes hcloud-hrobot-talos-cluster or studies it to
 build their own block. It says how to run the tests, what each test proves and
 what every file in the repository holds. Words such as block, operator and
 manifest are defined in

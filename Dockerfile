@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# Builds the hcloud-talos-cluster block operator image.
+# Builds the hcloud-hrobot-talos-cluster block operator image.
 # Usage: DOCKER_BUILDKIT=1 docker build .
 # The block-kit and talos-cluster-kit modules are public, so go mod download
 # fetches them through the Go module proxy with no credential.

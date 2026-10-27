@@ -25,7 +25,7 @@ var (
 
 const (
 	cloudConfigHeader = "#cloud-config\n"
-	userDataBoundary  = "mitstack-hcloud-talos-cluster"
+	userDataBoundary  = "mitstack-hcloud-hrobot-talos-cluster"
 
 	builderConfigPath = "/root/mitstack-build/config.yaml"
 	builderScriptPath = "/usr/local/bin/mitstack-build-image"
