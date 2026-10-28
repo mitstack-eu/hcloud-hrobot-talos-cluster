@@ -79,8 +79,8 @@ github.com/mdlayher/socket v0.6.1 h1:M7uj2NtuujUY4mYr1C57NmfNiRHbkKpnBxO856lsc3A
 github.com/mdlayher/socket v0.6.1/go.mod h1:+/SGtqc9V+5dAuRgQsU0fGBI+oRDiW7O2Obx10OIWfg=
 github.com/mitstack-eu/block-kit v0.5.4 h1:LXRVGY/UQe5B3nvcMt1fipsGCMfUENA5rBIDK5/VBck=
 github.com/mitstack-eu/block-kit v0.5.4/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
-github.com/mitstack-eu/talos-cluster-kit v0.17.0 h1:/8n3wccUCMjX/jVFBKXZzGa+4pB5PW5wkbDe3x12+Rk=
-github.com/mitstack-eu/talos-cluster-kit v0.17.0/go.mod h1:GXaRyJcU7bVs2wjA8c6DQePF8RrAXbDodW4RpuDSBsc=
+github.com/mitstack-eu/talos-cluster-kit v0.18.0 h1:AxTChu1KJ6/ruuendC8OG09srDcNRSuxU8ArrUnkA8o=
+github.com/mitstack-eu/talos-cluster-kit v0.18.0/go.mod h1:WZ3ko/+yKjGvk5mgmyikcDG1X1/ftx81bNAX+dHPLmg=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/onsi/ginkgo/v2 v2.20.1 h1:YlVIbqct+ZmnEph770q9Q7NVAz4wwIiVNahee6JyUzo=

@@ -31,8 +31,8 @@ const (
 	workerWritten      = "written"
 	workerFailed       = "failed"
 
-	// roleWorkerImage labels the short-lived server that builds and serves the worker's image, so Plane.Delete finds it.
-	roleWorkerImage controlplane.Role = "worker-image"
+	// roleImageServer labels the short-lived server that builds and serves the worker's image, so Plane.Delete finds it.
+	roleImageServer controlplane.Role = "robot-image-server"
 	// workerSubnet is the network's subnet on the vSwitch, whose first address is Hetzner's vSwitch gateway.
 	workerSubnet         = "10.0.1.0/24"
 	workerInstallTimeout = time.Hour
@@ -355,7 +355,7 @@ func (c imageCloud) CreateImageServer(ctx context.Context, s robotworker.ImageSe
 	}
 	created, err := c.plane.API.CreateServers(ctx, controlplane.ServerSpec{
 		Name: s.Name, ServerType: c.plane.ServerType, Location: s.Location, Image: s.Image, UserData: s.UserData,
-		Labels: c.plane.Labels(roleWorkerImage), NetworkIDs: []int64{c.network}, FirewallIDs: []int64{firewall},
+		Labels: c.plane.Labels(roleImageServer), NetworkIDs: []int64{c.network}, FirewallIDs: []int64{firewall},
 	})
 	if err != nil {
 		return 0, err
@@ -395,7 +395,7 @@ func (c imageCloud) awaitGateway(ctx context.Context) (int64, error) {
 }
 
 func (c imageCloud) ImageServerAddress(ctx context.Context, id int64) (netip.Addr, error) {
-	servers, err := c.plane.API.ListServers(ctx, c.plane.RoleSelector(roleWorkerImage))
+	servers, err := c.plane.API.ListServers(ctx, c.plane.RoleSelector(roleImageServer))
 	if err != nil {
 		return netip.Addr{}, err
 	}

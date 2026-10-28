@@ -92,8 +92,8 @@ otherwise. The class is the name that follows `refused:` in the answer.
 
 | Class | Meaning | What you do |
 |---|---|---|
-| `missing-param` | `appName`, or `robotServerNumber`, is empty | Fill in the param and subscribe again |
-| `invalid-param` | `serverType` is not a listed type, `hostsPlatform` is true, or `robotServerNumber` is not a positive whole number | Fix the param |
+| `missing-param` | `appName` or `robotServerNumber` is empty, or `hostsPlatform` is `true` and `openbaoSealKeyRecipient` is empty | Fill in the param and subscribe again |
+| `invalid-param` | `serverType` is not a listed type, `robotServerNumber` is not a positive whole number, or `openbaoSealKeyRecipient` is not one public key that can be encrypted to | Fix the param |
 | `missing-hetzner-access` | The Hetzner connection holds no `api_token` | Connect a Hetzner Cloud project token and retry |
 | `missing-robot-access` | The Hetzner connection holds no `robot_user` or no `robot_password` | Add the Robot webservice login to the connection and retry |
 | `missing-github-access` | The GitHub connection is unusable | Connect GitHub and retry |

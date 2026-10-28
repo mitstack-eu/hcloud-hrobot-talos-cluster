@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a Robot worker's Talos metal image on the image server with imager,
-# decompresses it, and serves it once to the worker's vSwitch address.
-# Usage: build-and-serve.sh <imager image by digest> <machine configuration> <network router> <worker address> <port> <TLS certificate> <TLS key> <serve program>
+# decompresses it to image.raw, then runs the serve command it is given.
+# Usage: build-and-serve.sh <imager image by digest> <machine configuration> <network router> <serve command>...
 #   SERVE_OUT_DIR, SERVE_PULL_ATTEMPTS, SERVE_RESOLV_CONF, SERVE_NET_CLASS and
 #   SERVE_ADDRESS_WAIT default to /var/lib/mitstack-image, 30,
 #   /etc/resolv.conf, /sys/class/net and 120 seconds.
@@ -62,11 +62,11 @@ build() {
 }
 
 main() {
-  [ "$#" -eq 8 ] || fail "usage: build-and-serve.sh <imager> <configuration> <router> <worker> <port> <certificate> <key> <serve program>"
+  [ "$#" -ge 4 ] || fail "usage: build-and-serve.sh <imager> <configuration> <router> <serve command>..."
   route_through_gateway "$3"
   pull_imager "$1"
   build "$1" "$2"
-  exec python3 -I "$8" "$4" "$5" "$6" "$7" "$out/image.raw"
+  exec "${@:4}"
 }
 
 main "$@"

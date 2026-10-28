@@ -54,7 +54,8 @@ what that repository holds to the cluster. A commit to the repository's
 | `issuerUrl` | The issuer every node signs service-account tokens for | `https://<issuerBucket>.s3.eu-central-1.amazonaws.com/<subscriptionId>` | Once the cluster is ready |
 | `clusterRepoUrl` | The web address of the cluster repository | `https://github.com/acme/shop-cluster` | Once the gateway and the repository exist, before the cluster is ready |
 | `enrolmentTokenSha256` | A fingerprint of the one-time token the cluster presents when it first signs up with mitstack, called enrolment. mitstack checks the presented token against it, so it needs the fingerprint before the cluster signs up | A base32 SHA-256 digest | Once the gateway and the repository exist, before the cluster is ready |
-| `repo` | The cluster repository's owner and name, recorded on the repository resource rather than the cluster | `acme/shop-cluster` | Once the repository exists with this subscription's mark, two GitHub topics the block sets on it |
+| `repo` | The cluster repository's owner and name, recorded on the repository resource rather than the cluster | `acme/shop-cluster` | Once the repository exists with this subscription's mark, two GitHub topics the block sets on it. A cluster that hosts mitstack also needs both deploy keys |
+| `openbaoSealKey`, `sealedSecretsKey`, `sealedSecretsCertificate`, `openbaoInit` | The keys a cluster that hosts mitstack needs to be recovered, as [A cluster that hosts mitstack](hosting-the-platform.md#the-recovery-outputs) describes | An armored PGP message | Once a cluster that hosts mitstack is ready |
 
 The cluster is ready once the control plane stands, the worker is written, and
 the newest node report since the last Cloud node's creation names every Cloud
@@ -115,9 +116,11 @@ the kit's `Plane.Outputs` makes those of a present one.
 
 ## Params
 
-The block reads four params: three you set, `appName`, `robotServerNumber` and
-`serverType`, and `hostsPlatform`, which you leave unset. Its manifest lists no `requires`, so
-no other block has to be in place first.
+The block reads five params. You set three, `appName`, `robotServerNumber` and
+`serverType`. The other two, `hostsPlatform` and `openbaoSealKeyRecipient`,
+are set only for the cluster that hosts mitstack itself, which
+[A cluster that hosts mitstack](hosting-the-platform.md) describes. Its
+manifest lists no `requires`, so no other block has to be in place first.
 
 `readParams` in `resource.go` reads the params. A subscribe with a param it
 cannot use is refused before anything is built, with the reason in the last
@@ -128,7 +131,8 @@ column.
 | `appName` | Yes | The name of the cluster repository, `<appName>-cluster` | Any name. An empty one is refused with `missing-param` |
 | `robotServerNumber` | Yes | The Robot number of the dedicated server your account rents, which becomes the cluster's worker | A positive whole number. An empty one is refused with `missing-param`, and any other value with `invalid-param` |
 | `serverType` | No, `cx33` when empty | The Hetzner server type of each of the three Cloud nodes, of the short-lived builder that makes the cluster's disk image, and of the worker's short-lived image server | `cx23`, `cx33`, `cx43`, `cx53`, `cpx32`, `cpx52` or `cpx62`, which `controlplane.ServerTypes` in the kit lists. Any other is refused with `invalid-param` |
-| `hostsPlatform` | No | Nothing you can use today: this release builds no cluster that hosts mitstack's own stores | Leave it unset. `true` is refused with `invalid-param` |
+| `hostsPlatform` | No | Whether the cluster hosts mitstack's own stores. Its repository then carries a write and a read-only deploy key the install creates, which go with the repository | Leave it unset for an app's cluster. Only `true` turns it on |
+| `openbaoSealKeyRecipient` | When `hostsPlatform` is `true` | The armored OpenPGP public key the install encrypts the cluster's keys to | One public key that can be encrypted to. An empty one is refused with `missing-param`, and any other value with `invalid-param` |
 
 Every type in that list is an x86 type, because the cluster's disk image is
 built for x86. Beyond the param checks, a subscribe also reads the dedicated

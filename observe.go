@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
@@ -154,6 +155,15 @@ func (repositoryObserver) ObserveResource(ctx context.Context, r contract.Resour
 	}
 	switch repo.state {
 	case repoPresent:
+		if hostsPlatform(r.Desired) {
+			keys, err := repo.gh.listDeployKeys(ctx)
+			if err != nil {
+				return contract.Observation{}, err
+			}
+			if wrong := deployKeyProblems(repo.name, keys); len(wrong) > 0 {
+				return contract.Observation{State: contract.Absent, StatusDetail: strings.Join(wrong, "; ")}, nil
+			}
+		}
 		return contract.Observation{State: contract.Present, Outputs: map[string]string{"repo": repo.name}, StatusDetail: repo.describe()}, nil
 	case repoGone, repoUnmarked:
 		return contract.Observation{State: contract.Absent, StatusDetail: repo.describe()}, nil
@@ -242,6 +252,16 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 			problems = append(problems, problem)
 		}
 	}
+	var recovery map[string]string
+	if len(problems) == 0 && hostsPlatform(d) {
+		var gap string
+		if recovery, gap, err = repo.gh.hostingOutputs(ctx); err != nil {
+			return contract.Observation{}, err
+		}
+		if gap != "" {
+			problems = append(problems, gap)
+		}
+	}
 	redrive, err := stepLeft(ctx, d, st, installing, repo)
 	if errors.Is(err, robot.ErrRateLimited) {
 		problems = append(problems, robotLimitDetail)
@@ -262,6 +282,7 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 	}
 	outputs, detail := p.Outputs(st)
 	outputs["clusterRepoUrl"] = repo.url
+	maps.Copy(outputs, recovery)
 	return contract.Observation{
 		State:        contract.Present,
 		Outputs:      outputs,

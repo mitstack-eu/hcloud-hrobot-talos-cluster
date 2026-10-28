@@ -57,7 +57,7 @@ among them, waits Pending until the worker joins.
 | Dedicated server | The worker, renamed `mitstack-<subscription id>`, where the id is lowercase with each non-alphanumeric character turned into a dash | `robotName` in `identity.go`, `startWorkerInstall` in `worker.go` |
 | vSwitch | Named like the server, coupled to the Cloud network as the subnet `10.0.1.0/24` with the network's routes exposed to it | `imageCloud.coupleSubnet` in `worker.go` |
 | Robot firewall | Admits the cluster network `10.0.0.0/16` to the worker | `workerFor` in `worker.go` |
-| Image server | A short-lived Cloud server labelled with the role `worker-image` that builds and serves the worker's disk image, deleted after | `imageCloud` in `worker.go` |
+| Image server | A short-lived Cloud server labelled with the role `robot-image-server` that builds and serves the worker's disk image, deleted after | `imageCloud` in `worker.go` |
 
 The worker sits at `10.0.1.2/24` on the vSwitch.
 
