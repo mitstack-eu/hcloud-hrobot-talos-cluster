@@ -45,7 +45,6 @@ const (
 
 var testStart = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
 
-// fakeReports plays the platform's node-reports read.
 type fakeReports struct {
 	reports []observe.NodeReport
 }
@@ -78,7 +77,6 @@ type installCall struct {
 	imageServer string
 }
 
-// env is one block under test with every fake it calls, and the clock its verbs read.
 type env struct {
 	t       *testing.T
 	block   *blockResource
@@ -252,7 +250,6 @@ func (e *env) network() controlplane.Network {
 	return e.cloud.OnlyNetwork(e.t, testPlane().Selector())
 }
 
-// subscriptionVSwitches are the uncancelled vSwitches named for the subscription.
 func (e *env) subscriptionVSwitches() []robot.VSwitch {
 	return slices.DeleteFunc(e.robot.VSwitches(), func(v robot.VSwitch) bool { return v.Name != robotName(testSub) || v.Cancelled })
 }
@@ -281,7 +278,6 @@ func (e *env) desired() contract.Desired {
 	return d
 }
 
-// observeRobot is what each Robot resource's observer reads.
 func (e *env) observeRobot() map[string]contract.Observation {
 	e.t.Helper()
 	out := map[string]contract.Observation{}
@@ -310,7 +306,6 @@ func (e *env) unsubscribe(d contract.Desired) error {
 	return err
 }
 
-// changes counts every call that changed Hetzner Cloud, Robot or GitHub.
 func (e *env) changes() int {
 	e.github.mu.Lock()
 	defer e.github.mu.Unlock()
@@ -378,7 +373,6 @@ func (e *env) repo() string {
 	return testOwner + "/" + testApp + "-cluster"
 }
 
-// settleBudget is the manifest's spec.lifecycle.settleBudget.
 const settleBudget = 75 * time.Minute
 
 // fakeGitHub serves the repository, topics and contents calls the block makes, from memory.
