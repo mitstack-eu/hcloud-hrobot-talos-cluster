@@ -2,196 +2,76 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/mitstack-eu/block-kit/contract"
+	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 )
 
-// clusterState is every Hetzner resource that carries a subscription's labels, sorted by role.
-type clusterState struct {
-	networks      []hcNetwork
-	firewalls     []hcFirewall
-	servers       map[role][]hcServer
-	loadBalancers map[role][]hcLoadBalancer
-	snapshots     []hcSnapshot
-}
-
-func listCluster(ctx context.Context, api hetznerAPI, subID string) (clusterState, error) {
-	sel := subscriptionSelector(subID)
-	st := clusterState{servers: map[role][]hcServer{}, loadBalancers: map[role][]hcLoadBalancer{}}
-	servers, err := api.ListServers(ctx, sel)
-	if err != nil {
-		return st, fmt.Errorf("listing the subscription's servers: %w", err)
-	}
-	for _, s := range servers {
-		st.servers[role(s.Labels[keyRole])] = append(st.servers[role(s.Labels[keyRole])], s)
-	}
-	lbs, err := api.ListLoadBalancers(ctx, sel)
-	if err != nil {
-		return st, fmt.Errorf("listing the subscription's load balancers: %w", err)
-	}
-	for _, lb := range lbs {
-		st.loadBalancers[role(lb.Labels[keyRole])] = append(st.loadBalancers[role(lb.Labels[keyRole])], lb)
-	}
-	if st.networks, err = api.ListNetworks(ctx, sel); err != nil {
-		return st, fmt.Errorf("listing the subscription's networks: %w", err)
-	}
-	if st.firewalls, err = api.ListFirewalls(ctx, sel); err != nil {
-		return st, fmt.Errorf("listing the subscription's firewalls: %w", err)
-	}
-	if st.snapshots, err = api.ListSnapshots(ctx, sel); err != nil {
-		return st, fmt.Errorf("listing the subscription's snapshots: %w", err)
-	}
-	return st, nil
-}
-
-func (st clusterState) network() (hcNetwork, bool) {
-	if len(st.networks) != 1 {
-		return hcNetwork{}, false
-	}
-	return st.networks[0], true
-}
-
-func (st clusterState) firewall() (hcFirewall, bool) {
-	if len(st.firewalls) != 1 {
-		return hcFirewall{}, false
-	}
-	return st.firewalls[0], true
-}
-
-func (st clusterState) server(r role) (hcServer, bool) {
-	if len(st.servers[r]) != 1 {
-		return hcServer{}, false
-	}
-	return st.servers[r][0], true
-}
-
-func (st clusterState) nodeIn(loc string) (hcServer, bool) {
-	return onlyOne(serversIn(st.servers[roleNode], loc))
-}
-
-func (st clusterState) loadBalancerIn(r role, loc string) (hcLoadBalancer, bool) {
-	return onlyOne(loadBalancersIn(st.loadBalancers[r], loc))
-}
-
-// serversIn reads a location from Hetzner's own record of the server, never from its name or a label.
-func serversIn(servers []hcServer, loc string) []hcServer {
-	return slices.DeleteFunc(slices.Clone(servers), func(s hcServer) bool { return s.Location != loc })
-}
-
-func loadBalancersIn(lbs []hcLoadBalancer, loc string) []hcLoadBalancer {
-	return slices.DeleteFunc(slices.Clone(lbs), func(lb hcLoadBalancer) bool { return lb.Location != loc })
-}
-
-func onlyOne[T any](items []T) (T, bool) {
-	if len(items) != 1 {
-		var none T
-		return none, false
-	}
-	return items[0], true
-}
-
-func (st clusterState) snapshot() (hcSnapshot, bool) {
-	if len(st.snapshots) != 1 {
-		return hcSnapshot{}, false
-	}
-	return st.snapshots[0], true
-}
-
-func (st clusterState) empty() bool {
-	count := len(st.networks) + len(st.firewalls) + len(st.snapshots)
-	for _, s := range st.servers {
-		count += len(s)
-	}
-	for _, lb := range st.loadBalancers {
-		count += len(lb)
-	}
-	return count == 0
-}
-
-// duplicates names each role more than one resource carries; the block touches nothing while any does.
-func (st clusterState) duplicates() []string {
-	var out []string
-	add := func(what string, ids []int64) {
-		if len(ids) > 1 {
-			out = append(out, duplicatesDetail(what, ids))
-		}
-	}
-	add("network", idsOf(st.networks, func(n hcNetwork) int64 { return n.ID }))
-	add("firewall", idsOf(st.firewalls, func(f hcFirewall) int64 { return f.ID }))
-	add("snapshot", idsOf(st.snapshots, func(s hcSnapshot) int64 { return s.ID }))
-	for _, r := range []role{roleGateway, roleBuilder} {
-		add(string(r)+" server", idsOf(st.servers[r], serverID))
-	}
-	for _, loc := range clusterLocations {
-		add(loc+" node server", idsOf(serversIn(st.servers[roleNode], loc), serverID))
-	}
-	for _, r := range []role{roleAPI, roleIngress} {
-		add(string(r)+" load balancer", idsOf(st.loadBalancers[r], loadBalancerID))
-	}
-	return out
-}
-
-func duplicatesDetail(what string, ids []int64) string {
-	named := make([]string, len(ids))
-	for i, id := range ids {
-		named[i] = strconv.FormatInt(id, 10)
-	}
-	return fmt.Sprintf("%d %ss carry this subscription's labels: %s", len(ids), what, strings.Join(named, ", "))
-}
-
-func serverID(s hcServer) int64 { return s.ID }
-
-func loadBalancerID(lb hcLoadBalancer) int64 { return lb.ID }
-
-func idsOf[T any](items []T, id func(T) int64) []int64 {
-	out := make([]int64, len(items))
-	for i, item := range items {
-		out[i] = id(item)
-	}
-	return out
-}
-
-// EnsureResources runs Ensure and then reads back, by label, what it converged.
+// EnsureResources runs Ensure and then reads back, by label and Robot name, what it converged.
 func (r *blockResource) EnsureResources(ctx context.Context, d contract.Desired) ([]contract.CreatedResource, error) {
 	if err := r.Ensure(ctx, d); err != nil {
 		return nil, err
 	}
-	st, err := listCluster(ctx, newHetznerAPI(d.Secrets["hetzner"]["api_token"]), d.SubscriptionID)
+	p := newPlane(newCloudAPI(d.Secrets["hetzner"]["api_token"]), d.SubscriptionID, d.Params["appName"])
+	st, err := p.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return st.createdResources(d.SubscriptionID, repoFor(d.Secrets["github"]["owner"], d.Params["appName"])), nil
+	out := createdResources(st, d.SubscriptionID, repoFor(d.Secrets["github"]["owner"], d.Params["appName"]))
+	t, _, ok := robotReader(d)
+	if !ok {
+		return out, nil
+	}
+	robotSt, err := t.read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, robotSt.createdResources(t)...), nil
 }
 
-// createdResources reports each declared resource by its identity, leaving out one not yet made.
-func (st clusterState) createdResources(subID string, repo clusterRepo) []contract.CreatedResource {
+// createdResources reports each declared Cloud and GitHub resource by its identity, leaving out one not yet made.
+func createdResources(st controlplane.State, subID string, repo clusterRepo) []contract.CreatedResource {
 	var out []contract.CreatedResource
 	add := func(name, typ, key string, id int64, ok bool) {
 		if ok {
 			out = append(out, contract.CreatedResource{Name: name, Type: typ, Identity: map[string]string{key: strconv.FormatInt(id, 10)}})
 		}
 	}
-	network, networkOK := st.network()
+	gw := controlplane.GatewayLocation
+	network, networkOK := st.Network()
 	add(resNetwork, resNetwork, "networkId", network.ID, networkOK)
-	firewall, firewallOK := st.firewall()
+	firewall, firewallOK := st.Firewall()
 	add(resFirewall, resFirewall, "firewallId", firewall.ID, firewallOK)
-	api, apiOK := st.loadBalancerIn(roleAPI, gatewayLocation)
-	add(located(resPrivateLB, gatewayLocation), typeLoadBalancer, "loadBalancerId", api.ID, apiOK)
-	ingress, ingressOK := st.loadBalancerIn(roleIngress, gatewayLocation)
-	add(located(resPublicLB, gatewayLocation), typeLoadBalancer, "loadBalancerId", ingress.ID, ingressOK)
+	api, apiOK := st.LoadBalancerIn(controlplane.RoleAPI, gw)
+	add(located(resPrivateLB, gw), typeLoadBalancer, "loadBalancerId", api.ID, apiOK)
+	ingress, ingressOK := st.LoadBalancerIn(controlplane.RoleIngress, gw)
+	add(located(resPublicLB, gw), typeLoadBalancer, "loadBalancerId", ingress.ID, ingressOK)
 	repoIdentity := map[string]string{"repo": repo.fullName()}
 	out = append(out,
 		contract.CreatedResource{Name: resRepository, Type: typeRepository, Identity: repoIdentity},
 		contract.CreatedResource{Name: resSeedCommit, Type: resSeedCommit, Identity: repoIdentity})
-	gw, gwOK := st.server(roleGateway)
-	add(resGateway, typeServer, "serverId", gw.ID, gwOK)
-	for _, loc := range clusterLocations {
-		node, nodeOK := st.nodeIn(loc)
+	gateway, gatewayOK := st.Server(controlplane.RoleGateway)
+	add(resGateway, typeServer, "serverId", gateway.ID, gatewayOK)
+	for _, loc := range controlplane.Locations {
+		node, nodeOK := st.NodeIn(loc)
 		add(located(resNode, loc), typeServer, "serverId", node.ID, nodeOK)
 	}
 	return append(out, contract.CreatedResource{Name: resCluster, Type: resCluster, Identity: map[string]string{"subscriptionId": subID}})
+}
+
+// createdResources reports the worker's Robot resources once the server carries the subscription's name.
+func (st robotState) createdResources(t robotTarget) []contract.CreatedResource {
+	if st.server.Name != t.name {
+		return nil
+	}
+	server := map[string]string{"serverNumber": strconv.FormatInt(t.server, 10)}
+	out := []contract.CreatedResource{
+		{Name: resDedicatedServer, Type: typeDedicatedServer, Identity: server},
+		{Name: resRobotFirewall, Type: typeRobotFirewall, Identity: server},
+	}
+	if st.vswitches == 1 {
+		out = append(out, contract.CreatedResource{Name: resVSwitch, Type: typeVSwitch, Identity: map[string]string{"vswitchId": strconv.FormatInt(st.vswitch.ID, 10)}})
+	}
+	return out
 }

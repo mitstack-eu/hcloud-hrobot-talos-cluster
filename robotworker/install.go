@@ -75,7 +75,7 @@ func (i Installer) Install(ctx context.Context, w Worker) (err error) {
 	if err != nil {
 		return fmt.Errorf("coupling server %d to vSwitch %s: %w", w.Server, w.VSwitch, err)
 	}
-	if err := i.Robot.WriteFirewall(ctx, w.Server, i.firewall(w)); err != nil {
+	if err := i.Robot.WriteFirewall(ctx, w.Server, Firewall(i.Cluster.Network, w)); err != nil {
 		return fmt.Errorf("writing the worker firewall of server %d: %w", w.Server, err)
 	}
 	restore, err := i.Robot.OpenRescueWindow(ctx, w.Server, i.From)
@@ -87,8 +87,9 @@ func (i Installer) Install(ctx context.Context, w Worker) (err error) {
 	return job.run(ctx)
 }
 
-func (i Installer) firewall(w Worker) robot.Firewall {
-	rules := append(robot.ReplyRules(), robot.Rule{Name: "icmp from network", IPVersion: "ipv4", SrcIP: i.Cluster.Network.String(), Protocol: "icmp", Action: "accept"})
+// Firewall is the worker's firewall: the replies to its own traffic, ICMP from the cluster's network, and w's rules.
+func Firewall(network netip.Prefix, w Worker) robot.Firewall {
+	rules := append(robot.ReplyRules(), robot.Rule{Name: "icmp from network", IPVersion: "ipv4", SrcIP: network.String(), Protocol: "icmp", Action: "accept"})
 	return robot.Firewall{Status: "active", FilterIPv6: true, WhitelistHOS: true, Input: append(rules, w.Rules...)}
 }
 

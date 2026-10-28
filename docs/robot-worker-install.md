@@ -1,8 +1,8 @@
 # How a Robot worker is installed
 
 This page explains how the package `robotworker` turns an adopted Hetzner Robot
-server into a Talos worker of the cluster. It is for the engineers who wire the
-install into the block's subscribe and who change it later. A Robot server is a
+server into a Talos worker of the cluster. It is for the engineers who change the
+install or the block's wiring of it, which sits in `worker.go`. A Robot server is a
 dedicated machine rented by the month. Its rescue system is a small Linux that
 Robot boots over the network when asked, from which the install writes the
 disk. The [glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main/docs/glossary.md)
@@ -80,17 +80,26 @@ The test `TestInstall_SendsNoSecretOverTheRescueSession` in
 password and no configuration appear in any command or input the rescue
 session received.
 
-## What the block must provide
+## What the block provides
 
 The package defines the interface `Cloud` and leaves its Hetzner Cloud side to
-the block. The block creates the image server in the cluster's network, in the
-server's location, from the image `docker-ce`. The network needs a subnet
-coupled to the vSwitch and `expose_routes_to_vswitch` true, which the trial
-needed for the route to the gateway.
+the block. `imageCloud` in `worker.go` implements it. Before it creates the
+image server, it couples the vSwitch to the cluster's Cloud network as the
+subnet `10.0.1.0/24`, with the network's routes exposed to the vSwitch, which
+the trial needed for the route to the gateway. It then waits until the gateway
+holds `10.0.0.2`, since a server that joined first would take that address.
+It creates the image server in the server's location, from the image
+`docker-ce`, labelled with the role `worker-image`, and deletes it after.
 
 The block also passes `Installer.From`, the public IPv4 address the operator's
-SSH leaves from. The Robot firewall admits SSH from that address alone while
-the rescue system runs.
+SSH leaves from. It reads that address from the operator's environment variable
+`MITSTACK_EGRESS_IPV4`, and the Robot firewall admits SSH from that address
+alone while the rescue system runs.
+
+`startWorkerInstall` in `worker.go` starts `Installer.Install` in the
+background of the call that creates the gateway and the builder, with a limit of
+one hour. [How a subscribe runs](how-a-subscribe-runs.md#how-the-worker-is-installed)
+explains its progress labels.
 
 ## What the tests prove
 
@@ -116,4 +125,5 @@ in the test, and the image server is `serve-image.py` itself on `127.0.0.1`.
 No live run has used this package. Whether Hetzner's rescue system carries
 curl is unproven, since the trial streamed the image through SSH. Whether a
 Robot worker joins a Cloud control plane over this path is the trial's own
-open question, which the block's first live subscription answers.
+open question, as are the Cilium MTU over the vSwitch and whether Hetzner
+deletes a network with a vSwitch still coupled.

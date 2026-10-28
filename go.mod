@@ -3,9 +3,8 @@ module github.com/mitstack-eu/hcloud-hrobot-talos-cluster
 go 1.26.10
 
 require (
-	github.com/hetznercloud/hcloud-go/v2 v2.49.0
 	github.com/mitstack-eu/block-kit v0.5.2
-	github.com/mitstack-eu/talos-cluster-kit v0.15.0
+	github.com/mitstack-eu/talos-cluster-kit v0.17.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/crypto v0.57.0
@@ -29,6 +28,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hetznercloud/hcloud-go/v2 v2.49.0 // indirect
 	github.com/jsimonetti/rtnetlink/v2 v2.2.1-0.20260802200809-43bafec815b3 // indirect
 	github.com/mdlayher/ethtool v0.6.1 // indirect
 	github.com/mdlayher/genetlink v1.4.0 // indirect

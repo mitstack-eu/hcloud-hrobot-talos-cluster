@@ -10,9 +10,10 @@ defines mitstack's own words.
 
 ## What runs inside the cluster
 
-The cluster's components come from `components.Default()` in the kit release
-`go.mod` requires, and `clusterComponents` in `manifests.go` adds the block's
-own manifests to that set. The kit here is
+The cluster's components come from `components.Default()` in the
+talos-cluster-kit release `go.mod` requires, and `clusterComponents` in
+`manifests.go` of the kit's `controlplane` package adds the block's own
+manifests to that set. The kit is
 [talos-cluster-kit](https://github.com/mitstack-eu/talos-cluster-kit). The
 machine configuration names each served manifest at the gateway, such as
 `https://10.0.0.2/manifests/kyverno.yaml`. The gateway fetches each one from
@@ -35,6 +36,11 @@ inside the configuration itself.
 | `mitstack-database-slices` | Lets a database slice's Postgres instances reach the API server and each other, and admits the operator on port 8000 and every slice on port 5432, each also on the mesh's port 15008 | Inline |
 | The local path provisioner | Gives each storage claim that names no class a directory on its node's own disk, through the default StorageClass `local-path` | Served, its namespace and network policy inline |
 | The node report, the enrolment Job and the token renewal | The block's own workloads, in `mitstack-node` | Inline |
+
+The block sets `AppsOnWorkers` on the plane, so the control-plane nodes keep
+Talos's `NoSchedule` taint and app pods run only on the worker. Cilium,
+ztunnel, the CNI agent and the log collector still run on every node. Every
+other pod, Argo CD among them, waits Pending until the worker joins.
 
 Every Kyverno policy exempts `mitstack-node`, so the block's own pods need no
 app label and keep their route to the platform. Every image these components
@@ -107,6 +113,7 @@ only a new subscribe gets a newer kit's components.
 The node report, the enrolment Job and the token renewal run in the
 talos-cluster-kit tools image, which the kit's own release publishes and signs.
 The block takes it from `tools.Image` in the kit release `go.mod` requires,
+and `toolsImage` in `resource.go` reads it,
 such as `ghcr.io/mitstack-eu/talos-cluster-kit-tools:v0.12.0@sha256:7fa01ea4…`.
 A build against a kit whose `tools.Image` carries the `unreleased` placeholder
 tag refuses every subscribe.
