@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// redriveEvery is how often the platform re-drove a settling subscribe on production.
+// redriveEvery is how often the platform re-drives a settling subscribe.
 const redriveEvery = 9 * time.Second
 
 // robotLimits are the hourly limits Robot's documentation gives the reads the block makes, at
@@ -103,6 +103,28 @@ func TestSubscribe_ARateLimitedRobotReadAnswersProgressAndWritesNothingToRobot(t
 			assert.Len(t, e.robot.Writes(), writes, "Robot writes while its limit holds")
 		})
 	}
+}
+
+func TestSubscribe_ARateLimitedReadAfterTheStepAnswersProgressAndWritesNothingToRobot(t *testing.T) {
+	e := newEnv(t)
+	limited := robottest.New(t)
+	limited.SetRateLimited(true)
+	logins := 0
+	swap(t, &newRobotClient, func(string, string) *robot.Client {
+		if logins++; logins == 1 {
+			return e.robot.Client()
+		}
+		return limited.Client()
+	})
+
+	sub := e.engine().post("subscribe")
+
+	require.Equal(t, 2, logins, "the Robot logins the subscribe made: the step's, then the read of what it converged")
+	assert.Equal(t, http.StatusOK, sub.status, "the subscribe: %s", sub.detail)
+	assert.True(t, sub.pending, "the subscribe answered settled: %s", sub.detail)
+	assert.Contains(t, sub.detail, "request limit", "the subscribe's detail")
+	assert.Empty(t, e.robot.Writes(), "Robot writes")
+	assert.Empty(t, limited.Writes(), "Robot writes while its limit holds")
 }
 
 func TestObserve_TheClusterIsUnknownNamingRobotsRequestLimitWhileItHolds(t *testing.T) {
