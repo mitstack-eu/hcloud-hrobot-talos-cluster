@@ -91,6 +91,83 @@
       "version": 1
     },
     {
+      "id": "hetzner.dedicated-server",
+      "capability": "hetzner",
+      "kind": "host",
+      "scope": "per-app",
+      "stateful": false,
+      "pricing": {
+        "priced": true,
+        "key": "HetznerRobot"
+      },
+      "category": "compute",
+      "languages": [
+        "any-container"
+      ],
+      "outputs": [
+        {
+          "name": "cloud.region",
+          "secret": false,
+          "required": false
+        },
+        {
+          "name": "execKind",
+          "secret": false,
+          "required": true
+        },
+        {
+          "name": "execTarget",
+          "secret": false,
+          "required": true
+        },
+        {
+          "name": "host.type",
+          "secret": false,
+          "required": false
+        },
+        {
+          "name": "hostId",
+          "secret": false,
+          "required": true
+        }
+      ],
+      "inputs": [
+        {
+          "name": "robotServerNumber",
+          "label": "Dedicated server number",
+          "required": false,
+          "secret": false,
+          "description": "The Robot number of a dedicated server the Hetzner account holds, which the block wipes and installs. Left empty, the block creates a Cloud server in its place."
+        }
+      ],
+      "observe": "GET /server/{server-number} on the Robot webservice returns the server named with the subscription's tag",
+      "absence": "GET /server/{server-number} returns a server that no longer carries the subscription's tag",
+      "timeBudgets": {
+        "delete": "10m",
+        "ensure": "30m",
+        "observe": "1m"
+      },
+      "failures": [
+        {
+          "class": "transient",
+          "cause": "the Robot webservice rate-limited the call or answered a server error"
+        },
+        {
+          "class": "permanent",
+          "cause": "the account's Robot webservice credential is invalid"
+        },
+        {
+          "class": "permanent",
+          "cause": "the server is cancelled, outside fsn1, nbg1 and hel1, or named by another subscription"
+        },
+        {
+          "class": "transient",
+          "cause": "the install in the rescue system failed or did not finish in time"
+        }
+      ],
+      "version": 1
+    },
+    {
       "id": "hetzner.firewall",
       "capability": "hetzner",
       "kind": "firewall",
@@ -380,6 +457,40 @@
       "version": 1
     },
     {
+      "id": "hetzner.robot-firewall",
+      "capability": "hetzner",
+      "kind": "firewall",
+      "scope": "per-app",
+      "stateful": false,
+      "pricing": {
+        "priced": false
+      },
+      "category": "network",
+      "outputs": [],
+      "observe": "GET /firewall/{server-number} on the Robot webservice returns the cluster's input rules, active",
+      "absence": "GET /server/{server-number} returns a server that no longer carries the subscription's tag",
+      "timeBudgets": {
+        "delete": "5m",
+        "ensure": "30m",
+        "observe": "30s"
+      },
+      "failures": [
+        {
+          "class": "transient",
+          "cause": "the Robot webservice rate-limited the call or answered a server error"
+        },
+        {
+          "class": "permanent",
+          "cause": "the account's Robot webservice credential is invalid"
+        },
+        {
+          "class": "permanent",
+          "cause": "Robot offers no firewall for the server"
+        }
+      ],
+      "version": 1
+    },
+    {
       "id": "hetzner.server",
       "capability": "hetzner",
       "kind": "host",
@@ -479,6 +590,40 @@
         {
           "class": "permanent",
           "cause": "the image names no image available in the location"
+        }
+      ],
+      "version": 1
+    },
+    {
+      "id": "hetzner.vswitch",
+      "capability": "hetzner",
+      "kind": "network",
+      "scope": "per-app",
+      "stateful": false,
+      "pricing": {
+        "priced": false
+      },
+      "category": "network",
+      "outputs": [],
+      "observe": "GET /vswitch/{vswitch-id} on the Robot webservice returns the vSwitch named with the subscription's tag",
+      "absence": "GET /vswitch lists no uncancelled vSwitch named with the subscription's tag",
+      "timeBudgets": {
+        "delete": "10m",
+        "ensure": "2m",
+        "observe": "30s"
+      },
+      "failures": [
+        {
+          "class": "transient",
+          "cause": "the Robot webservice rate-limited the call or answered a server error"
+        },
+        {
+          "class": "permanent",
+          "cause": "the account's Robot webservice credential is invalid"
+        },
+        {
+          "class": "permanent",
+          "cause": "every VLAN from 4000 to 4091 is taken in the account"
         }
       ],
       "version": 1
