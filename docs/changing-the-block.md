@@ -18,7 +18,7 @@ commands. Run the suites from the repository root:
 ```bash
 go vet ./...
 go test ./...
-shellcheck scripts/*.sh
+shellcheck scripts/*.sh robotworker/scripts/*.sh
 ```
 
 | Test file | What it proves |
@@ -29,6 +29,7 @@ shellcheck scripts/*.sh
 | `scripts_test.go` | The build, the first-node bootstrap and the cluster's credential calls |
 | `teardown_test.go` | Unsubscribe deletes every resource, the snapshot included |
 | `declared_resources_test.go`, `secrets_leak_test.go` | block-kit's block guards and that no token reaches an answer or the logs |
+| `robotworker/*_test.go` | A Robot worker's install in each of the three locations, the refusal of any other, and that no key crosses the rescue session, as [How a Robot worker is installed](robot-worker-install.md#what-the-tests-prove) lists |
 
 ## Files every block starts with
 
@@ -74,6 +75,7 @@ type snapshot sits at `testdata/type-snapshot.json` instead.
 | `metrics.go` | Reads the builder's CPU and disk metrics from Hetzner, for the progress and failure messages |
 | `nodereports.go` | Reads the cluster's node reports from mitstack |
 | `teardown.go` | Runs the unsubscribe |
+| `robotworker/` | Writes an adopted Robot server's Talos disk from its rescue system, with the scripts the rescue system and the image server run |
 | `harness_test.go` | The shared test fakes: Hetzner in memory, GitHub, the node reports, and an engine that plays mitstack |
 | `subscribe_test.go` | Proves what a subscribe builds, every refusal and the outputs |
 | `redrive_test.go` | Proves that one subscribe reaches three nodes through mitstack's repeated requests |
