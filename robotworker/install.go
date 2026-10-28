@@ -61,6 +61,9 @@ type Installer struct {
 // so a block runs it in the background. It refuses a server outside Locations before any write.
 func (i Installer) Install(ctx context.Context, w Worker) (err error) {
 	server, err := i.Robot.GetServer(ctx, w.Server)
+	if err != nil && robot.ErrorCode(err) != "SERVER_NOT_FOUND" {
+		return fmt.Errorf("reading dedicated server %d: %w", w.Server, err)
+	}
 	if err == nil && !slices.Contains(Locations, server.Location()) {
 		return handler.Refuse("location-unsupported", "dedicated server %d is in %s, and a Robot worker is installed only in fsn1, nbg1 or hel1, where its vSwitch reaches the cluster's Cloud network, so nothing was changed",
 			w.Server, server.DC)
@@ -99,11 +102,16 @@ type install struct {
 }
 
 func (j *install) run(ctx context.Context) error {
+	keyName := j.worker.Name + "-rescue"
+	// An install that died before its cleanup leaves its key behind.
+	if err := j.Robot.DeleteKeys(ctx, keyName); err != nil {
+		return err
+	}
 	key, err := robot.NewRescueKey()
 	if err != nil {
 		return err
 	}
-	session, err := j.Robot.BootRescue(ctx, j.worker.Server, j.worker.Name+"-rescue", key)
+	session, err := j.Robot.BootRescue(ctx, j.worker.Server, keyName, key)
 	if session.Fingerprint != "" {
 		j.session = &session
 	}

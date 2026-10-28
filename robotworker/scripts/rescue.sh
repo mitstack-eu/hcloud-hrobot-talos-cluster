@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Runs in Hetzner's rescue system on a Robot worker. "read" prints each disk
 # with its serial, the MAC of the card the default route leaves by, and
-# whether the firmware booted by UEFI. "write" clears every disk's arrays and
-# signatures, brings up the vSwitch VLAN, and streams the node's disk image
-# from the install's image server over it onto the disk with the given serial.
+# whether the firmware booted by UEFI. "write" brings up the vSwitch VLAN,
+# waits until the install's image server answers over it, clears every disk's
+# arrays and signatures, and streams the image onto the disk with the given
+# serial.
 # Usage: rescue.sh read
 #        rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>
 #   RESCUE_SYS, RESCUE_DEV, RESCUE_FETCH_ATTEMPTS and RESCUE_FETCH_INTERVAL
@@ -100,32 +101,43 @@ join_vswitch() {
   ip route add "$server/32" via "$gateway" dev "$vswitch_link"
 }
 
-# stream retries while the image server still builds the image, and stops at once on a key other than the pinned one.
-stream() {
-  local url=$1 pin=$2 disk=$3 n=0 statuses
+# fetch retries while the image server still builds the image, and stops at once on a key other than the pinned one.
+# Given a disk it streams the image onto it, and otherwise it asks only for the image's headers.
+fetch() {
+  local url=$1 pin=$2 disk=${3:-} n=0 statuses
+  local args=(--silent --show-error --fail --insecure --pinnedpubkey "$pin" --connect-timeout 10)
   while :; do
     n=$((n + 1))
     set +e
-    curl --silent --show-error --fail --insecure --pinnedpubkey "$pin" --connect-timeout 10 "$url" |
-      dd of="$disk" bs=4M conv=notrunc,fsync status=none
-    statuses=("${PIPESTATUS[@]}")
+    if [ -n "$disk" ]; then
+      curl "${args[@]}" "$url" | dd of="$disk" bs=4M conv=notrunc,fsync status=none
+      statuses=("${PIPESTATUS[@]}")
+    else
+      curl "${args[@]}" --head "$url" > /dev/null
+      statuses=("$?" 0)
+    fi
     set -e
     [ "${statuses[*]}" = "0 0" ] && return 0
     if [ "${statuses[0]}" -eq "$pin_refused" ]; then
       fail "$url presented a key other than the pinned $pin, so nothing more is written"
     fi
-    [ "$n" -lt "$attempts" ] || fail "$url gave no image in $attempts attempts, the last ending with curl status ${statuses[0]}"
+    [ "$n" -lt "$attempts" ] || fail "$url gave no answer in $attempts attempts, the last ending with curl status ${statuses[0]}"
     sleep "$interval"
   done
 }
 
+# write_image clears the disks only once the image server answered with the pinned key over the vSwitch.
 write_image() {
   [ "$#" -eq 7 ] || fail "usage: rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>"
-  local disk
+  local disk tool url="https://$4:$5/image.raw"
+  for tool in curl dd wipefs sgdisk mdadm; do
+    command -v "$tool" > /dev/null || fail "the rescue system has no $tool, so no disk was touched"
+  done
   disk=$(disk_with_serial "$7")
-  clear_disks
   join_vswitch "$1" "$2" "$3" "$4"
-  stream "https://$4:$5/image.raw" "$6" "$disk"
+  fetch "$url" "$6"
+  clear_disks
+  fetch "$url" "$6" "$disk"
   sync
   ip link del "$vswitch_link"
   echo "rescue: wrote the image to $disk, serial $7"

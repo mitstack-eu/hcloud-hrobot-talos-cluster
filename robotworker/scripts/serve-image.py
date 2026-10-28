@@ -3,7 +3,8 @@
 Usage: serve-image.py <worker address> <port> <TLS certificate> <TLS key> <image>
 
 It exists because the image embeds every key of the cluster: the TLS key is
-deleted once loaded, and the image once one whole copy reached the worker.
+deleted once loaded, and the image once the worker read one whole copy and
+closed the connection.
 """
 
 import os
@@ -22,15 +23,26 @@ def serve_one(tls, image, size):
         if not chunk or len(request) > MAX_REQUEST:
             return False
         request += chunk
-    if not request.startswith(b"GET /image.raw "):
+    head = request.startswith(b"HEAD /image.raw ")
+    if not head and not request.startswith(b"GET /image.raw "):
         tls.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         return False
     tls.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
                 b"Content-Length: %d\r\nConnection: close\r\n\r\n" % size)
+    if head:
+        return False
     with open(image, "rb") as f:
         while chunk := f.read(1 << 20):
             tls.sendall(chunk)
-    return True
+    return reader_closed(tls)
+
+
+def reader_closed(tls):
+    """Counts a fetch served only once the worker closes after the last byte, since sendall only fills a buffer."""
+    try:
+        return tls.recv(1) == b""
+    except (ssl.SSLZeroReturnError, ssl.SSLEOFError):
+        return True
 
 
 def main():

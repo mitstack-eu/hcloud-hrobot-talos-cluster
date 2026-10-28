@@ -90,11 +90,15 @@ func dial(ctx context.Context, addr string, config *ssh.ClientConfig) (*ssh.Clie
 	if err != nil {
 		return nil, err
 	}
+	// The handshake takes no context, so a rescue system that accepts the connection and stalls is cut off here.
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	_ = conn.SetDeadline(time.Now().Add(rescueDialTimeout))
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
-	if err != nil {
+	if !stop() || err != nil {
 		conn.Close()
-		return nil, err
+		return nil, errors.Join(err, ctx.Err())
 	}
+	_ = conn.SetDeadline(time.Time{})
 	return ssh.NewClient(c, chans, reqs), nil
 }
 
@@ -181,7 +185,6 @@ func readHardware(ctx context.Context, client *ssh.Client) (hardware, error) {
 	return hw, nil
 }
 
-// imageFetch is where the rescue fetches the image and the pin of the TLS key that server presents.
 type imageFetch struct {
 	server netip.Addr
 	pin    string

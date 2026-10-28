@@ -8,7 +8,7 @@ Robot boots over the network when asked, from which the install writes the
 disk. The [glossary](https://github.com/mitstack-eu/mitstack-workspace/blob/main/docs/glossary.md)
 defines block, kit and operator.
 
-The install follows the measured answers of one live trial, recorded in the
+The install follows what one live trial measured, recorded in the
 note [Talos Linux on a Hetzner Robot server behind a vSwitch gateway](https://github.com/mitstack-eu/mitstack-workspace/blob/main/product/knowledge/2026-10-28-talos-on-a-hetzner-robot-server-behind-a-vswitch-gateway.md).
 Robot's own calls come from block-kit's package `capabilities/hetzner/robot`,
 and the worker's configuration and image from talos-cluster-kit.
@@ -29,12 +29,14 @@ subscribe waits for each answer, so the block starts it in the background.
 | Refuse a server that did not boot by UEFI | `readHardware` | How the firmware boots the unified kernel image |
 | Render the worker with its hostname and vSwitch link, found by MAC | `nodeconfig.RenderWorker` | How the node gets its name and addresses |
 | Build the `metal` image on a short-lived Cloud server, the image server | `build-and-serve.sh` | What the kit lacks for a Robot node |
-| Stop every array, clear every signature, and write the image over the vSwitch onto the disk with the first serial | `rescue.sh write` | How the image reaches the disks |
+| Bring up the vSwitch VLAN and wait until the image server answers with the pinned key, then stop every array, clear every signature, and write the image onto the disk with the first serial | `rescue.sh write` | How the image reaches the disks |
 | Delete the key, restore the worker firewall and reset with no rescue active | `install.cleanUp` | What Robot answered |
 
 The install chooses its disk by serial because the kernel's disk names changed
 between boots on the trial. Of two disks, it takes the one whose serial sorts
-first, so a repeated install picks the same disk.
+first, so a repeated install picks the same disk. The rescue system clears no
+disk until the image server has answered over the vSwitch, so a missing curl, a
+broken VLAN or an image server that never starts leaves the disks as they were.
 
 ## How the cluster's keys reach the disk
 
@@ -59,13 +61,19 @@ token and the cluster's certificate authorities. It travels another way:
    image with `curl --pinnedpubkey`, so it accepts only the server holding that
    TLS key.
 5. `robotworker/scripts/serve-image.py` serves one whole copy to the worker's
-   vSwitch address alone. It deletes the TLS key once loaded and the image once
-   served, and the install then deletes the image server.
+   vSwitch address alone. It deletes the TLS key once loaded, and the image once
+   the worker read a whole copy and closed the connection. The install then
+   deletes the image server.
 
 An attacker who answers the rescue system's SSH learns only the pin and the
 addresses. An attacker who answers on the vSwitch cannot present the pinned
-key. When Robot does name host keys, the session accepts only those, by MD5 or
-SHA-256 fingerprint.
+key. The image server knows its client only by source address, so a server on
+the same vSwitch that claimed the worker's address could fetch the image. Only
+servers of the same Robot account can join that vSwitch.
+
+When Robot does name host keys, the session accepts only those, by MD5 or
+SHA-256 fingerprint. No live answer has shown the form Robot names them in,
+since the trial got none.
 
 The test `TestInstall_SendsNoSecretOverTheRescueSession` in
 `robotworker/install_test.go` pins that no fixture key, no TLS key, no Robot
@@ -96,6 +104,8 @@ curl, python3 and zstd on the machine.
 | `TestInstall_SendsNoSecretOverTheRescueSession` | The rescue session carries no key, as above |
 | `TestInstall_RefusesARescueSystemWhoseHostKeyRobotDidNotName` | A rescue system presenting another host key runs nothing |
 | `TestInstall_StopsAndCleansUpWhenTheImageServerPresentsAnotherKey` | The rescue writes nothing when the pin does not match, and the run cleans up |
+| `TestInstall_LeavesTheDisksAloneWhenTheImageServerNeverAnswers` | No disk is cleared when the image server never answers, and the run cleans up |
+| `TestInstall_GivesUpOnARescueSystemThatNeverAnswersTheHandshake` | A rescue system that accepts the connection and stalls ends the run with its context, and the key and the firewall are cleaned up |
 | `TestBuildAndServe_BuildsTheMetalImageDiscardingImagerOutputAndServesItToTheWorker` | The image server builds the `metal` image and serves it decompressed |
 
 The Robot fake is block-kit's `robottest`, the rescue system is an SSH server
