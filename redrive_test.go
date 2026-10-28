@@ -30,12 +30,13 @@ func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesAndItsWorkerThrou
 	assert.Empty(t, e.byRole(controlplane.RoleBuilder), "a builder outlived its snapshot")
 	assert.Len(t, e.installed(), 1, "worker installs")
 	var subscribes int
-	for _, a := range p.posted {
+	for i, a := range p.posted {
 		if a.op == "subscribe" {
 			subscribes++
-			assert.True(t, a.pending, "a subscribe answered settled while the cluster was unfinished: %s", a.detail)
+			assert.True(t, a.pending || i == len(p.posted)-1, "a subscribe answered settled while the cluster was unfinished: %s", a.detail)
 		}
 	}
+	assert.Equal(t, contract.Present, e.observe().State, "the cluster once the last call answered settled")
 	assert.Greater(t, subscribes, 1, "subscribes: the engine never re-drove one")
 }
 
@@ -96,7 +97,7 @@ func TestSubscribe_ARedriveSentTwiceAtEachSignalMakesEveryResourceOnce(t *testin
 	assert.Empty(t, e.byRole(controlplane.RoleBuilder), "builders")
 	assert.Len(t, e.installed(), 1, "worker installs")
 	assert.Len(t, e.subscriptionVSwitches(), 1, "vSwitches")
-	assert.Equal(t, 9, e.cloud.Count(), "four servers, two load balancers, a network, a firewall and a snapshot")
+	assert.Equal(t, 10, e.cloud.Count(), "four servers, two load balancers, a network, a firewall, and the snapshots of the cluster and worker images")
 }
 
 func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBefore(t *testing.T) {
@@ -138,6 +139,7 @@ func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBef
 			e.buildTakes = 0
 			first := p.settle(func() bool { return e.building() })
 			e.cloud.PowerOff(e.byRole(controlplane.RoleBuilder)[0].ID)
+			e.buildTakes = 10 * time.Minute
 			v := p.post("validate")
 			before := e.cloud.Resources()
 			last := p.settle(nil)

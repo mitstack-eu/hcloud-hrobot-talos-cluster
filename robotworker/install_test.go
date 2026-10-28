@@ -15,6 +15,7 @@ import (
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/robottest"
 	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/talos-cluster-kit/serve"
 	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,7 +149,7 @@ func TestInstall_SendsNoSecretOverTheRescueSession(t *testing.T) {
 	h := newHarness(t, "FSN1-DC14")
 	require.NoError(t, h.install(t))
 	files := userDataFiles(t, h.cloud.created[0].UserData)
-	secrets := append(testutil.SecretValues(t), robottest.Password, files[serveKeyPath], files[serveConfigPath])
+	secrets := append(testutil.SecretValues(t), robottest.Password, files[serve.KeyPath], files[serveConfigPath])
 	require.True(t, slices.ContainsFunc(testutil.SecretValues(t), func(s string) bool { return strings.Contains(files[serveConfigPath], s) }),
 		"the image server's user data carries the cluster's keys, so the check below can find one")
 

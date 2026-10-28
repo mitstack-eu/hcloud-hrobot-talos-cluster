@@ -54,9 +54,9 @@ func TestSubscribe_BuildsTheCloudControlPlaneAndInstallsTheRobotServerAsItsWorke
 	assert.Equal(t, map[int64]string{vswitches[0].ID: "10.0.1.0/24"}, network.VSwitchSubnets, "the network's vSwitch subnets")
 	assert.True(t, network.ExposeRoutesToVSwitch, "the network's routes reach the vSwitch")
 	assert.Equal(t, workerWritten, network.Labels[keyWorkerInstall], "the worker's progress")
-	assert.Empty(t, e.byRole(roleWorkerImage), "an image server outlived the install")
-	assert.Equal(t, testPlane().Labels(roleWorkerImage), e.cloud.SpecFor(t, roleWorkerImage).Labels, "the image server's labels")
-	assert.Equal(t, []int64{network.ID}, e.cloud.SpecFor(t, roleWorkerImage).NetworkIDs, "the image server's networks")
+	assert.Empty(t, e.byRole(roleImageServer), "an image server outlived the install")
+	assert.Equal(t, testPlane().Labels(roleImageServer), e.cloud.SpecFor(t, roleImageServer).Labels, "the image server's labels")
+	assert.Equal(t, []int64{network.ID}, e.cloud.SpecFor(t, roleImageServer).NetworkIDs, "the image server's networks")
 }
 
 func TestSubscribe_TheImageServerWaitsForTheGatewayToHoldItsAddress(t *testing.T) {
@@ -94,7 +94,7 @@ func TestSubscribe_RefusesBeforeAnyChange(t *testing.T) {
 		want  string
 	}{
 		{name: "a server type the image cannot run on is refused", opts: []envOption{withParam("serverType", "cax21")}, want: `params["serverType"] is "cax21"`},
-		{name: "a cluster that hosts the platform is refused", opts: []envOption{withParam("hostsPlatform", "true")}, want: "hostsPlatform"},
+		{name: "a cluster that hosts the platform without a recipient key is refused", opts: []envOption{withParam("hostsPlatform", "true")}, want: paramRecipient},
 		{
 			name: "a build against a kit whose tools image is unreleased is refused",
 			setup: func(t *testing.T, _ *env) {

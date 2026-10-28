@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/robottest"
+	"github.com/mitstack-eu/talos-cluster-kit/serve"
 	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v4"
@@ -166,20 +167,20 @@ func (c *fakeCloud) CreateImageServer(_ context.Context, s ImageServer) (int64, 
 	c.created = append(c.created, s)
 	files := userDataFiles(c.t, s.UserData)
 	c.dir = c.t.TempDir()
-	cert, key := files[serveCertPath], files[serveKeyPath]
+	cert, key := files[serve.CertPath], files[serve.KeyPath]
 	if c.otherKey {
 		other, err := newServeKey()
 		require.NoError(c.t, err)
-		cert, key = other.certPEM, other.keyPEM
+		cert, key = other.CertPEM, other.KeyPEM
 	}
 	c.image = "metal image embedding\n" + files[serveConfigPath]
-	for name, content := range map[string]string{"tls.crt": cert, "tls.key": key, "image.raw": c.image, "serve-image.py": files[serveProgPath]} {
+	for name, content := range map[string]string{"tls.crt": cert, "tls.key": key, "image.raw": c.image, "serve.py": files[serve.ProgramPath]} {
 		writeFile(c.t, filepath.Join(c.dir, name), content)
 	}
 	if c.silent {
 		return int64(len(c.created)), nil
 	}
-	c.serve = exec.Command("python3", "-I", filepath.Join(c.dir, "serve-image.py"), "127.0.0.1", strconv.Itoa(servePort),
+	c.serve = exec.Command("python3", "-I", filepath.Join(c.dir, "serve.py"), "127.0.0.1", strconv.Itoa(servePort),
 		filepath.Join(c.dir, "tls.crt"), filepath.Join(c.dir, "tls.key"), filepath.Join(c.dir, "image.raw"))
 	require.NoError(c.t, c.serve.Start())
 	c.exited = make(chan struct{})
@@ -210,7 +211,9 @@ func (c *fakeCloud) DeleteImageServer(_ context.Context, id int64) error {
 func userDataFiles(t *testing.T, userData string) map[string]string {
 	body, ok := strings.CutPrefix(userData, "#cloud-config\n")
 	require.True(t, ok, "the user data is no cloud-config")
-	var config cloudConfig
+	var config struct {
+		WriteFiles []serve.File `yaml:"write_files"`
+	}
 	require.NoError(t, yaml.Unmarshal([]byte(body), &config))
 	files := map[string]string{}
 	for _, f := range config.WriteFiles {
