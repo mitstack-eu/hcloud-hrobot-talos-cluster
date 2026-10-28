@@ -13,13 +13,11 @@ import (
 //go:embed scripts/build-and-serve.sh
 var buildAndServeScript string
 
-// servePort is a variable so a test can serve the image on a port of its own.
 var servePort = serve.DefaultPort
 
 const (
 	serveConfigPath = serve.Dir + "/config.yaml"
 	serveScriptPath = "/usr/local/bin/mitstack-build-and-serve"
-	// servedImage is the image the build leaves, which the rescue fetches at /image.raw.
 	servedImage = "/var/lib/mitstack-image/image.raw"
 )
 
