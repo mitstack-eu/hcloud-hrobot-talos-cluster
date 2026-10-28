@@ -127,6 +127,7 @@ the repo too when it carries the two GitHub topics the block set on it.
 ├── metrics.go               reads the builder's CPU and disk metrics
 ├── nodereports.go           reads the cluster's node reports
 ├── teardown.go              runs the unsubscribe
+├── robotworker/             writes a Robot server's Talos disk from its rescue system
 ├── *_test.go                the rest of the tests, listed in docs/
 └── testdata/                type snapshot and a default cluster's golden file
 ```
@@ -138,3 +139,4 @@ the repo too when it carries the two GitHub topics the block set on it.
 - [Build progress and failures](docs/build-progress-and-failures.md): what a build reports, and every refusal.
 - [Inside the cluster](docs/inside-the-cluster.md): what runs there, the tools image and the logs.
 - [Changing the block](docs/changing-the-block.md): running the tests, and what each file holds.
+- [How a Robot worker is installed](docs/robot-worker-install.md): each install part, the trial note section it follows, and how the keys reach the disk.
