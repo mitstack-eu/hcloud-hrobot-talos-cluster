@@ -196,6 +196,10 @@ type convergence struct {
 // refuses before any change a cluster it cannot act on unambiguously, a repository without the subscription's mark, or
 // a dedicated server it may not adopt. The network and the repository need no wait, so they come first.
 func (r *blockResource) Ensure(ctx context.Context, d contract.Desired) error {
+	return waitOutRobotLimit(ensure(ctx, d))
+}
+
+func ensure(ctx context.Context, d contract.Desired) error {
 	req, err := readEnsureRequest(d)
 	if err != nil {
 		return err

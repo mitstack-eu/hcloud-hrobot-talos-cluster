@@ -136,6 +136,14 @@ It then deletes the repo when it carries the two GitHub topics the block set on 
   the Robot account, not only the adopted server. The block uses the one
   login the connection holds, and acts only on the server whose number the
   subscription names, and on the vSwitch named for the subscription.
+- Robot allows `GET /server/{number}` 200 times an hour, and the vSwitch and
+  firewall reads 500 times. Past a limit it answers `403 RATE_LIMIT_EXCEEDED`,
+  and after three failed logins it blocks the calling address for ten minutes.
+  The operator answers a repeat Robot read from its last answer for one minute,
+  about 60 reads an hour each. While Robot still refuses, the build waits and
+  changes nothing in Robot, as
+  [Robot's request limits](docs/build-progress-and-failures.md#robots-request-limits)
+  explains.
 - A cluster has one worker in this release.
 - A restart of the operator during the worker's install loses the cluster's
   keys, and the next subscribe refuses with `worker-install-lost`. You then

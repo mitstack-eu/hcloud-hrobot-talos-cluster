@@ -22,14 +22,13 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.2.0
-  releaseClass: feature
+  version: 0.2.1
+  releaseClass: correctness-fix
   releaseNote: >-
-    A dedicated server joins the cluster as its Talos worker over a vSwitch,
-    and app pods run on it alone. The control plane now comes from
-    talos-cluster-kit's controlplane package and builds what 0.1.0 built.
-    Subscribe takes the server's number as robotServerNumber, and the
-    hetzner connection must hold the Robot webservice login.
+    A build stays inside Hetzner Robot's hourly request limits, since the
+    operator answers a repeat Robot read from its last answer for a minute.
+    When Robot still answers 403 RATE_LIMIT_EXCEEDED, subscribe waits in
+    progress and changes nothing in Robot, instead of failing the build.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated
