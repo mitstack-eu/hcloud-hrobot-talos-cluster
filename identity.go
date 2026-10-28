@@ -1,7 +1,6 @@
 package main
 
-// Every Cloud resource carries the subscription's labels, and each Robot resource carries the subscription in its name,
-// since Robot holds no labels.
+// Robot holds no labels, so each Robot resource carries the subscription in its name.
 
 import (
 	"strings"
@@ -12,7 +11,6 @@ import (
 
 const blockID = "hcloud-hrobot-talos-cluster"
 
-// newPlane is the subscription's Cloud control plane, as every verb names it.
 func newPlane(api controlplane.API, subID, appName string) controlplane.Plane {
 	return controlplane.Plane{
 		API:           api,
@@ -27,8 +25,7 @@ func newPlane(api controlplane.API, subID, appName string) controlplane.Plane {
 	}
 }
 
-// robotName names the subscription's dedicated server and vSwitch with the whole subscription id, so no other
-// subscription's name can match it.
+// robotName keeps the whole subscription id, so no other subscription's name can match it.
 func robotName(subID string) string {
 	return robot.NamePrefix + strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
