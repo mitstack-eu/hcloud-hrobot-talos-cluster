@@ -3,7 +3,7 @@ module github.com/mitstack-eu/hcloud-hrobot-talos-cluster
 go 1.26.10
 
 require (
-	github.com/mitstack-eu/block-kit v0.5.2
+	github.com/mitstack-eu/block-kit v0.5.4
 	github.com/mitstack-eu/talos-cluster-kit v0.17.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.6

@@ -25,7 +25,7 @@ func (r *blockResource) EnsureResources(ctx context.Context, d contract.Desired)
 	}
 	robotSt, err := t.read(ctx)
 	if err != nil {
-		return nil, err
+		return nil, waitOutRobotLimit(err)
 	}
 	return append(out, robotSt.createdResources(t)...), nil
 }

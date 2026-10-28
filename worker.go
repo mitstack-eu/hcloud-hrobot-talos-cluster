@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -183,6 +184,17 @@ func (c convergence) workerRefusal(ctx context.Context) error {
 		return nil
 	}
 	return c.robotTarget().admits(ctx)
+}
+
+const robotLimitDetail = "Robot answered 403 RATE_LIMIT_EXCEEDED, so its hourly request limit is reached; " +
+	"the operator changes nothing in Robot until a later call reads it again"
+
+// waitOutRobotLimit answers a Robot refusal past its request limit as a wait, since it passes once the hour's allowance refills.
+func waitOutRobotLimit(err error) error {
+	if errors.Is(err, robot.ErrRateLimited) {
+		return handler.Wait("%s", robotLimitDetail)
+	}
+	return err
 }
 
 // robotTarget is the subscription's dedicated server and the names it and its vSwitch carry.

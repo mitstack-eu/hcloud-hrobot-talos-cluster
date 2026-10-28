@@ -36,6 +36,47 @@ refusal.
 A worker install that ends in an error marks the network `failed`, and the
 operator's log says why. The next subscribe refuses with `worker-install-failed`.
 
+## Robot's request limits
+
+Hetzner's
+[Robot webservice documentation](https://robot.hetzner.com/doc/webservice/en.html)
+limits how often an account may call each request in an hour. The block reads
+four of them while a build settles:
+
+| Request | Robot's hourly limit | What the block reads with it |
+|---|---|---|
+| `GET /server/{number}` | 200 | The dedicated server's name, location and status |
+| `GET /vswitch` | 500 | The vSwitches, to find the one named for the subscription |
+| `GET /vswitch/{id}` | 500 | Whether the server is on that vSwitch |
+| `GET /firewall/{number}` | 500 | Whether the server's firewall admits the cluster's network |
+
+Past a limit Robot answers `403 RATE_LIMIT_EXCEEDED`. After three failed logins
+Robot also blocks the calling address for ten minutes, so a wrong
+`robot_password` in the connection stops every Robot call from the operator for
+that time.
+
+The platform calls subscribe and validate again about every nine seconds while
+a build settles, and each call reads the server, the vSwitch and the firewall.
+To stay inside the limits, the operator answers a repeat read from its last
+answer for one minute. That window comes from block-kit's Robot client, shared
+by every call the operator serves with the same login. It keeps each read at
+about 60 an hour, against Robot's lowest limit of 200. A Robot write drops the
+answers it changes, and the install reads Robot afresh before every write. The
+test `TestSubscribe_ASettleReDrivenEveryNineSecondsStaysInsideRobotsHourlyRequestLimits`
+in `robot_limits_test.go` plays a 75-minute settle at one call every nine
+seconds and holds the server reads to 120 an hour at most.
+
+When Robot answers `403 RATE_LIMIT_EXCEEDED` anyway, the build waits instead of
+failing. Subscribe answers in progress and makes no Robot change. Validate
+reads the worker's Robot resources as unknown, and the cluster too once any of
+it stands. Both details begin
+"Robot answered 403 RATE_LIMIT_EXCEEDED, so its hourly request limit is
+reached". Validate asks for no new subscribe while the limit holds, and the
+operator does not ask Robot the same read again within the minute. Once a read
+succeeds, the build carries on where it stopped. You need do nothing, unless
+something else on the same Robot account spends the allowance, such as a script
+of your own.
+
 ## Refusals and what to do about them
 
 Every refusal comes before the call changes anything unless the table says

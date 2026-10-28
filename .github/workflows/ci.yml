@@ -24,11 +24,11 @@ permissions:
 
 jobs:
   block:
-    uses: mitstack-eu/block-kit/.github/workflows/publish-block.yml@v0.5.2
+    uses: mitstack-eu/block-kit/.github/workflows/publish-block.yml@v0.5.4
     with:
       block-id: hcloud-hrobot-talos-cluster
       ecr-repository: mitstack-hcloud-hrobot-talos-cluster
-      kit-ref: v0.5.2
+      kit-ref: v0.5.4
       go-version: "1.26.10"
       runs-on: ${{ vars.CI_RUNS_ON || '["ubicloud-standard-2"]' }}
 

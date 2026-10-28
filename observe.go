@@ -87,10 +87,12 @@ func (o robotObserver) ObserveResource(ctx context.Context, r contract.ResourceR
 		return refused, nil
 	}
 	st, err := t.read(ctx)
-	if robot.ErrorCode(err) == "SERVER_NOT_FOUND" {
+	switch {
+	case robot.ErrorCode(err) == "SERVER_NOT_FOUND":
 		return contract.Observation{State: contract.Absent, StatusDetail: fmt.Sprintf("Robot holds no dedicated server %d", t.server)}, nil
-	}
-	if err != nil {
+	case errors.Is(err, robot.ErrRateLimited):
+		return unknown(robotLimitDetail), nil
+	case err != nil:
 		return contract.Observation{}, err
 	}
 	return o.judge(t, st), nil
@@ -241,7 +243,9 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 		}
 	}
 	redrive, err := stepLeft(ctx, d, st, installing, repo)
-	if err != nil {
+	if errors.Is(err, robot.ErrRateLimited) {
+		problems = append(problems, robotLimitDetail)
+	} else if err != nil {
 		return contract.Observation{}, err
 	}
 	if len(problems) > 0 || redrive {
@@ -286,7 +290,9 @@ func stepLeft(ctx context.Context, d contract.Desired, st controlplane.State, in
 	c := convergence{plane: req.plane(newCloudAPI(req.token)), state: st, installing: installing, req: req, repo: repoRead{exists: repo.state != repoGone, marked: repo.state == repoPresent}}
 	network, ok := st.Network()
 	var refused *handler.Refused
-	if err := c.refusal(ctx); errors.As(err, &refused) || !ok || !c.repo.exists {
+	if err := c.refusal(ctx); errors.Is(err, robot.ErrRateLimited) {
+		return false, err
+	} else if errors.As(err, &refused) || !ok || !c.repo.exists {
 		return true, nil
 	} else if err != nil {
 		return false, err
