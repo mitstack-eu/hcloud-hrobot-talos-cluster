@@ -61,12 +61,13 @@ To stay inside the limits, the operator answers a repeat read from its last
 answer for one minute. That window comes from block-kit's Robot client, shared
 by every call the operator serves with the same login. It keeps each read at
 about 60 an hour, against Robot's lowest limit of 200. A Robot write drops the
-answers it changes, and the install reads Robot afresh before every write. The
+answers it changes, and each Robot call that writes reads what it changes from
+Robot itself, never from the window. The
 test `TestSubscribe_ASettleReDrivenEveryNineSecondsStaysInsideRobotsHourlyRequestLimits`
 in `robot_limits_test.go` plays a 75-minute settle at one call every nine
 seconds and holds the server reads to 120 an hour at most.
 
-When Robot answers a subscribe or validate `403 RATE_LIMIT_EXCEEDED` anyway, the
+When Robot answers `403 RATE_LIMIT_EXCEEDED` to a subscribe or validate anyway, the
 build waits instead of failing. Subscribe answers in progress and makes no
 Robot change. Validate
 reads the worker's Robot resources as unknown, and the cluster too once any of
@@ -78,8 +79,9 @@ succeeds, the next subscribe carries on where the last one stopped. You need do
 nothing, unless something else on the same Robot account spends the allowance,
 such as a script of your own.
 
-The worker's install runs in the operator's background and reads Robot afresh
-before each write. A `403 RATE_LIMIT_EXCEEDED` there ends the install like any
+The worker's install runs in the operator's background, and its adoption,
+vSwitch coupling and firewall write each read Robot afresh before writing.
+A `403 RATE_LIMIT_EXCEEDED` there ends the install like any
 other error, and the next subscribe refuses with `worker-install-failed`, as
 [When a build fails](#when-a-build-fails) describes.
 
