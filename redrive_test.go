@@ -30,6 +30,7 @@ func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesAndItsWorkerThrou
 	assert.Empty(t, e.byRole(controlplane.RoleBuilder), "a builder outlived its snapshot")
 	assert.Len(t, e.installed(), 1, "worker installs")
 	var subscribes int
+	// The last call may be the subscribe that deletes the worker builder beside its snapshot, which finishes the cluster itself.
 	for i, a := range p.posted {
 		if a.op == "subscribe" {
 			subscribes++
