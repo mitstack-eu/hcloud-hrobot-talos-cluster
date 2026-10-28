@@ -26,8 +26,10 @@ install itself logs through the operator's `/logs` route, with the request's sec
 
 ## When a build fails
 
-A builder still running 30 minutes after its creation has failed, since its
-script leaves a failed build running. Validate then asks for a re-drive, and
+A builder still running 60 minutes after its creation has failed, since its
+script leaves a failed build running. The builder powers off only once its image
+is built and the gateway's mirror answers, so a gateway whose mirror never
+fills fails the build too. Validate then asks for a re-drive, and
 that subscribe deletes the builder and refuses with `image-build-failed`. The
 refusal carries the metrics summary, when the disk last moved and when the CPU
 was last above 10%. A metrics read that fails never fails validate or the
@@ -107,7 +109,7 @@ otherwise. The class is the name that follows `refused:` in the answer.
 | `vswitch-lost` | No vSwitch named for the subscription is left, and the worker boots on its VLAN alone | Unsubscribe and subscribe again |
 | `ambiguous-vswitch` | More than one vSwitch carries the subscription's name | Cancel the extra ones in Robot and retry |
 | `repository-not-marked` | The cluster repository exists without the subscription's mark, two GitHub topics | Add both topics if it is the cluster's repository, or move it away, and retry |
-| `image-build-failed` | The builder did not power itself off within 30 minutes | Unsubscribe and subscribe again |
+| `image-build-failed` | The builder did not power itself off within 60 minutes | Unsubscribe and subscribe again |
 | `ambiguous-cluster` | Two Cloud servers of one role in one location, or two load balancers of one role, carry the subscription's labels | Delete the extra ones from the Hetzner project and retry |
 | `server-unavailable` | Hetzner cannot place a server, or `fsn1` can order neither gateway type | Subscribe again later |
 | `gateway-lost` | The nodes run but no gateway carries the subscription's labels | Unsubscribe and subscribe again |

@@ -73,18 +73,20 @@ IPv4 address. [Params, connections and outputs](docs/reference.md) has every tab
    in `fsn1`, `nbg1` or `hel1`.
 3. Open this block on the console's [Blocks page](https://api.mitstack.dev/blocks), choose
    **Add to an app**, pick your app, and fill in `appName` and `robotServerNumber`.
-4. Once the console shows the subscription ready, in up to 75 minutes, commit
+4. Once the console shows the subscription ready, in up to 105 minutes, commit
    your Kubernetes manifests to the repo's `cluster/` folder.
 
 ## How it works
 
-A cluster takes up to 75 minutes to build, but mitstack waits only two minutes
+A cluster takes up to 105 minutes to build, but mitstack waits only two minutes
 for each answer. So the operator, the program in this repository, does one
 small stage each time mitstack asks, and mitstack keeps asking until it is done.
 
 The control plane builds as in the kit: a short-lived builder server makes the
 disk image every Cloud node starts from, and the gateway, the only Cloud server
-with a public address, starts etcd, the cluster's database. In the call that
+with a public address, starts etcd, the cluster's database. The builder
+finishes only once the gateway's mirror holds every image the cluster runs, so
+no Cloud node boots before the images it pulls are there. In the call that
 creates the gateway and the builder, the operator also starts the worker's
 install in the background of its own process. That call is the only moment the
 cluster's keys exist outside the image. The install names the dedicated server,
