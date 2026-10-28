@@ -9,8 +9,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v4"
@@ -22,6 +24,9 @@ type parsedManifest struct {
 		Description string   `yaml:"description"`
 		Provides    []string `yaml:"provides"`
 		Resources   []any    `yaml:"resources"`
+		Lifecycle   struct {
+			SettleBudget string `yaml:"settleBudget"`
+		} `yaml:"lifecycle"`
 	} `yaml:"spec"`
 }
 
@@ -61,14 +66,15 @@ func TestManifest_ProvidesTheKubernetesClusterType(t *testing.T) {
 	}
 }
 
-func TestManifest_DeclaresANodeInEachLocationAndOneAPIAndOneIngressLoadBalancerInFsn1(t *testing.T) {
+func TestManifest_DeclaresTheCloudControlPlaneAndTheWorkersThreeRobotResources(t *testing.T) {
 	want := map[string]string{
 		"hetzner.network": "hetzner.network", "hetzner.firewall": "hetzner.firewall", "gateway": "hetzner.server",
 		"api-load-balancer-fsn1": "hetzner.load-balancer", "ingress-load-balancer-fsn1": "hetzner.load-balancer",
 		"github.repository": "github.gitops-repository", "github.gitops-commit": "github.gitops-commit",
 		"hetzner.kubernetes-cluster": "hetzner.kubernetes-cluster",
+		"dedicated-server":           "hetzner.dedicated-server", "vswitch": "hetzner.vswitch", "robot-firewall": "hetzner.robot-firewall",
 	}
-	for _, location := range clusterLocationNames {
+	for _, location := range controlplane.Locations {
 		want["node-"+location] = "hetzner.server"
 	}
 
@@ -107,7 +113,7 @@ func TestReadParams_EveryServerTypeTheBlockCreatesIsOneTheHetznerServerTypeAllow
 	}
 	require.NotEmpty(t, allowed, "the %s type's serverType input lists no allowed value", typeServer)
 
-	for _, st := range slices.Concat(gatewayServerTypes, []string{defaultServerType}, allowedServerTypes) {
+	for _, st := range slices.Concat(controlplane.GatewayServerTypes, []string{controlplane.DefaultServerType}, controlplane.ServerTypes) {
 		assert.Contains(t, allowed, st, "the block takes server type %s, which the platform refuses at subscribe", st)
 	}
 }
@@ -116,4 +122,11 @@ func TestManifest_DescriptionFitsThePlatformsBounds(t *testing.T) {
 	description := strings.TrimSpace(parseManifest(t).Spec.Description)
 	assert.GreaterOrEqual(t, len(description), 10)
 	assert.LessOrEqual(t, len(description), 240, "the platform refuses a spec.description outside 10 to 240 characters")
+}
+
+func TestManifest_TheSettleBudgetCoversTheControlPlaneAndTheWorkersInstall(t *testing.T) {
+	budget, err := time.ParseDuration(parseManifest(t).Spec.Lifecycle.SettleBudget)
+
+	require.NoError(t, err)
+	assert.Equal(t, settleBudget, budget, "the settle budget the harness's engine waits within")
 }

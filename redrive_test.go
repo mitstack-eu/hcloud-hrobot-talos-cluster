@@ -1,6 +1,7 @@
 package main
 
-// One subscribe reaches the three running nodes through the engine's re-drives, each call waiting on one Hetzner action at most.
+// One subscribe reaches the three running nodes and the written worker through the engine's re-drives, each call
+// waiting on one Hetzner action at most.
 
 import (
 	"errors"
@@ -11,11 +12,12 @@ import (
 
 	"github.com/mitstack-eu/block-kit/contract"
 	"github.com/mitstack-eu/block-kit/verify/kittest"
+	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesThroughTheEnginesRedrives(t *testing.T) {
+func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesAndItsWorkerThroughTheEnginesRedrives(t *testing.T) {
 	e := newEnv(t)
 	p := e.engine()
 
@@ -23,9 +25,10 @@ func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesThroughTheEngines
 
 	require.Equal(t, http.StatusOK, final.status, "the last answer: %s", final.detail)
 	require.False(t, final.pending, "the last answer: %s", final.detail)
-	assert.Len(t, e.hetzner.byRole(t, roleNode), 3, "nodes")
-	assert.Len(t, e.hetzner.byRole(t, roleGateway), 1, "gateways")
-	assert.Empty(t, e.hetzner.byRole(t, roleBuilder), "a builder outlived its snapshot")
+	assert.Len(t, e.byRole(controlplane.RoleNode), 3, "nodes")
+	assert.Len(t, e.byRole(controlplane.RoleGateway), 1, "gateways")
+	assert.Empty(t, e.byRole(controlplane.RoleBuilder), "a builder outlived its snapshot")
+	assert.Len(t, e.installed(), 1, "worker installs")
 	var subscribes int
 	for _, a := range p.posted {
 		if a.op == "subscribe" {
@@ -53,8 +56,8 @@ func TestSubscribe_EachCallCreatesOneNodeAtMost(t *testing.T) {
 
 	e.engine().settle(nil)
 
-	require.Len(t, e.hetzner.byRole(t, roleNode), 3, "nodes")
-	for i, nodes := range e.hetzner.nodesPerCreate {
+	require.Len(t, e.byRole(controlplane.RoleNode), 3, "nodes")
+	for i, nodes := range e.cloud.NodesPerCreate {
 		assert.LessOrEqual(t, nodes, 1, "server create %d made %d nodes", i, nodes)
 	}
 }
@@ -88,13 +91,12 @@ func TestSubscribe_ARedriveSentTwiceAtEachSignalMakesEveryResourceOnce(t *testin
 		}
 	}
 
-	assert.Len(t, e.hetzner.byRole(t, roleNode), 3, "nodes")
-	assert.Len(t, e.hetzner.byRole(t, roleGateway), 1, "gateways")
-	assert.Empty(t, e.hetzner.byRole(t, roleBuilder), "builders")
-	snaps, err := e.hetzner.ListSnapshots(e.ctx(), subscriptionSelector(testSub))
-	require.NoError(t, err)
-	assert.Len(t, snaps, 1, "snapshots")
-	assert.Equal(t, 9, e.hetzner.count(), "four servers, two load balancers, a network, a firewall and a snapshot")
+	assert.Len(t, e.byRole(controlplane.RoleNode), 3, "nodes")
+	assert.Len(t, e.byRole(controlplane.RoleGateway), 1, "gateways")
+	assert.Empty(t, e.byRole(controlplane.RoleBuilder), "builders")
+	assert.Len(t, e.installed(), 1, "worker installs")
+	assert.Len(t, e.subscriptionVSwitches(), 1, "vSwitches")
+	assert.Equal(t, 9, e.cloud.Count(), "four servers, two load balancers, a network, a firewall and a snapshot")
 }
 
 func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBefore(t *testing.T) {
@@ -104,17 +106,17 @@ func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBef
 	kittest.AssertVerbSemantics(t, kittest.VerbSeams{
 		Subscribe: func() (int, error) {
 			err := p.settle(nil).err()
-			return e.hetzner.count(), err
+			return e.count(), err
 		},
 		Unsubscribe: func() (int, error) {
 			err := p.post("unsubscribe").err()
-			return e.hetzner.count(), err
+			return e.count(), err
 		},
 		UnsubscribeWhenAbsent: func() error { return p.post("unsubscribe").err() },
 		Upgrade: func() (bool, error) {
-			before := e.hetzner.resources()
+			before := e.cloud.Resources()
 			err := p.post("upgrade").err()
-			return maps.Equal(before, e.hetzner.resources()), err
+			return maps.Equal(before, e.cloud.Resources()), err
 		},
 		ValidateWhileConverging: func() (bool, bool) {
 			reports := e.reports.reports
@@ -124,7 +126,7 @@ func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBef
 			return v.pending, v.err() != nil
 		},
 		ValidateWhenDead: func() (bool, bool) {
-			e.hetzner.failNext = errors.New("hetzner answered 401: the token was revoked")
+			e.cloud.FailNext = errors.New("hetzner answered 401: the token was revoked")
 			v := p.post("validate")
 			return v.pending, v.err() != nil
 		},
@@ -135,13 +137,13 @@ func TestVerbSemantics_ARedrivenSubscribeResumesTheBuildAndChangesNothingMadeBef
 			}
 			e.buildTakes = 0
 			first := p.settle(func() bool { return e.building() })
-			e.hetzner.powerOffBuilder(t)
+			e.cloud.PowerOff(e.byRole(controlplane.RoleBuilder)[0].ID)
 			v := p.post("validate")
-			before := e.hetzner.resources()
+			before := e.cloud.Resources()
 			last := p.settle(nil)
 			changed := 0
 			for id, was := range before {
-				if e.hetzner.resources()[id] != was {
+				if e.cloud.Resources()[id] != was {
 					changed++
 				}
 			}

@@ -9,27 +9,31 @@ and on [Params, connections and outputs](reference.md#words-used-on-this-page).
 
 ## How to run the tests
 
-The tests run every verb against an in-memory Hetzner project, a GitHub fake
-and a fake of the platform's node reports, in `harness_test.go`. Its `engine`
-plays the platform's settle check, sending signed requests to the block's own
-handler. The script tests run each embedded script with bash against fake
+The tests run every verb against an in-memory Hetzner Cloud project, an
+in-memory Robot account, a GitHub fake and a fake of the platform's node
+reports, in `harness_test.go`. Its `engine` plays the platform's settle check,
+sending signed requests to the block's own handler. The worker's install runs
+without a rescue system in these tests, on a schedule the test sets. The script
+tests in `robotworker/` run each embedded script with bash against fake
 commands. Run the suites from the repository root:
 
 ```bash
 go vet ./...
 go test ./...
-shellcheck scripts/*.sh robotworker/scripts/*.sh
+shellcheck robotworker/scripts/*.sh
 ```
+
+The control plane's own tests, such as the user data, the builder's scripts and
+the Hetzner client, live in talos-cluster-kit's `controlplane` package.
 
 | Test file | What it proves |
 |---|---|
-| `subscribe_test.go` | A node in each of the three locations on one network, one API and one ingress load balancer in `fsn1` at their fixed addresses, the ingress address under `fsn1`, no node with user data, only the gateway with a public address, every refusal, the builder's metrics in the build progress and the `image-build-failed` refusal, the cluster's enrolment outputs while it waits on its nodes' report, its `issuerBucket` and `issuerUrl`, checked against the issuer in the machine configuration the builder bakes into the nodes' image, and a cluster whose gateway lacks the issuer label reading unknown |
-| `redrive_test.go` | One subscribe reaching all three nodes through the platform's re-drives, validate asking for one exactly when a subscribe has a stage to take, at most one Hetzner action waited and one node created per call, and a doubled re-drive making nothing twice |
-| `userdata_test.go` | The builder's embedded configuration with the API load balancer's address in its certificates and the cluster's components, its user data within Hetzner's limit, the gateway's two cloud-config parts, mirror and served manifests, the node report's `checks` member, the object types it read whole with `madeAt` and no right on Secrets, `STATE` and `EPHEMERAL` encrypted under the `nodeID` key and named in the report, and a default cluster's components, mirror and configuration documents against `testdata/default-cluster.golden` |
-| `scripts_test.go` | The build, the first-node bootstrap and the cluster's credential calls |
-| `teardown_test.go` | Unsubscribe deletes every resource, the snapshot included |
-| `declared_resources_test.go`, `secrets_leak_test.go` | block-kit's block guards and that no token reaches an answer or the logs |
-| `robotworker/*_test.go` | A Robot worker's install in each of the three locations, the refusal of any other, and that no key crosses the rescue session, as [How a Robot worker is installed](robot-worker-install.md#what-the-tests-prove) lists |
+| `subscribe_test.go` | One subscribe reaches the control plane and the worker through the engine's re-drives. The image server waits for the gateway to hold its address. Every refusal comes before any change. A lost or failed install is refused and observed so. A written worker's lost Robot resource is put back, and a cancelled vSwitch is refused. The cluster reads unknown until the newest node report reads every node and the worker Ready. The enrolment outputs and the issuer outputs appear as `reference.md` describes. The Robot resources are read by the subscription's name |
+| `redrive_test.go` | Each call waits on at most one Hetzner action and creates at most one node, validate asks for a re-drive exactly when a subscribe has a step to take, a re-drive sent twice makes every resource once, and a re-driven subscribe changes nothing made before |
+| `teardown_test.go` | Unsubscribe deletes every resource the snapshot included and releases the Robot server, stops a running install, keeps a repository without the mark, and without a connection deletes what it can reach and refuses naming what it left |
+| `manifest_test.go` | The manifest provides `hetzner.kubernetes-cluster`, declares the Cloud control plane and the worker's three Robot resources, fits the platform's description bounds and settle budget, and every declared resource has an observer |
+| `declared_resources_test.go`, `secrets_leak_test.go` | block-kit's block guards, and that no token or Robot login reaches an answer or the logs |
+| `robotworker/*_test.go` | A Robot worker's install in each of the three locations, the refusal of any other, the image server's build script, and that no key crosses the rescue session, as [How a Robot worker is installed](robot-worker-install.md#what-the-tests-prove) lists |
 
 ## Files every block starts with
 
@@ -43,7 +47,7 @@ them, and adds its own files after.
 |---|---|
 | `manifest.yaml` | What the block is, the resources it builds, the type it provides and the requests it answers |
 | `main.go` | Starts the operator's web service: `/hook` takes mitstack's requests, `/logs` serves the operator's recent log lines and `/healthz` answers a health check. It reads `MITSTACK_JWKS_URL`, the address where mitstack publishes its signing keys, to check each request |
-| `resource.go` | Reads the params and the Hetzner token, and takes each subscribe stage |
+| `resource.go` | Reads the params, the Hetzner token and Robot login and the operator's `MITSTACK_EGRESS_IPV4`, refuses what it cannot act on, and takes each subscribe stage through the kit's `Plane` |
 | `Dockerfile` | Builds the operator's container image |
 | `go.mod` | The Go module, and the versions of the modules it uses, among them block-kit and talos-cluster-kit |
 | `go.sum` | The checksums of those modules |
@@ -62,26 +66,17 @@ type snapshot sits at `testdata/type-snapshot.json` instead.
 | `README.md` | The front page of the repository |
 | `docs/` | These pages, the detail behind the README |
 | `LICENSE` | The Business Source License 1.1, whose grant allows production use only for infrastructure the mitstack platform manages |
-| `hetzner.go` | The block's Hetzner Cloud client. It offers no rebuild, resize or user-data update, so no request can change a running server |
-| `identity.go` | The labels every Hetzner resource carries, by which each request finds the subscription's resources |
-| `state.go` | Reads every Hetzner resource with the subscription's labels and sorts them by role |
-| `install.go` | Mints the cluster's keys and creates the gateway and the builder in the same request |
-| `userdata.go` | The start-up data the builder and the gateway boot with |
-| `manifests.go` | Adds the block's own Kubernetes manifests to talos-cluster-kit's components, and names the tools image |
-| `manifests/` | Those manifests: the Argo CD Applications, the Job that signs the cluster up, and the token renewal |
-| `scripts/` | The shell scripts the servers run, to build the image, start the first node and fetch the cluster's tokens |
+| `identity.go` | Names the Cloud control plane the block drives, and names the Robot server and vSwitch after the subscription |
+| `worker.go` | The Robot worker's install in the background, its progress labels on the Cloud network, its refusals and repairs, and the image server's placement |
+| `state.go` | Reports the resources a subscribe created, the Cloud ones and the worker's Robot ones |
 | `repository.go` | Creates, reads and deletes the cluster repository on GitHub |
 | `observe.go` | The observers, which read each resource from Hetzner and GitHub and report it present, absent or not yet known. They also set the outputs and tell mitstack when to send the next subscribe |
-| `metrics.go` | Reads the builder's CPU and disk metrics from Hetzner, for the progress and failure messages |
-| `nodereports.go` | Reads the cluster's node reports from mitstack |
+| `nodereports.go` | Reads the cluster's node reports from mitstack, and judges them against the Cloud nodes and the worker |
 | `teardown.go` | Runs the unsubscribe |
-| `robotworker/` | Writes an adopted Robot server's Talos disk from its rescue system, with the scripts the rescue system and the image server run |
-| `harness_test.go` | The shared test fakes: Hetzner in memory, GitHub, the node reports, and an engine that plays mitstack |
+| `robotworker/` | Writes an adopted Robot server's Talos disk from its rescue system, with the scripts the rescue system and the image server run in `robotworker/scripts/` |
+| `harness_test.go` | The shared test fakes: Hetzner Cloud and Robot in memory, GitHub, the node reports, and an engine that plays mitstack |
 | `subscribe_test.go` | Proves what a subscribe builds, every refusal and the outputs |
-| `redrive_test.go` | Proves that one subscribe reaches three nodes through mitstack's repeated requests |
-| `userdata_test.go` | Proves the builder's and the gateway's start-up data |
-| `scripts_test.go` | Runs each script against fake commands |
-| `hetzner_adapter_test.go` | Proves the Hetzner client's requests, such as a node with no user data and no public address |
-| `manifest_test.go` | Proves the manifest's type, server types and description, and that every declared resource has an observer |
+| `redrive_test.go` | Proves that one subscribe reaches the cluster through mitstack's repeated requests |
+| `manifest_test.go` | Proves the manifest's type, resources, description and settle budget, and that every declared resource has an observer |
 | `declared_resources_test.go` | Runs block-kit's block guards |
-| `testdata/` | `type-snapshot.json`, the platform's resource types the tests read, and `default-cluster.golden`, a default cluster's expected components |
+| `testdata/` | `type-snapshot.json`, the platform's resource types the tests read |

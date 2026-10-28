@@ -1,20 +1,20 @@
-# hcloud-hrobot-talos-cluster runs a three-node Talos Kubernetes cluster on Hetzner
-# Cloud for one app, from talos-cluster-kit, with one control-plane node in
-# each of fsn1, nbg1 and hel1. Subscribe creates a private network whose
-# default route goes to a gateway, a firewall with no rule, and in fsn1, the
-# gateway's location, a private load balancer for the Kubernetes API and a
-# public one for ports 80 and 443 that both find every node by label, and a
-# private cluster repository on GitHub. The gateway, the cluster's only
-# server with a public address, forwards and records the nodes' traffic and
-# serves their image mirror. A short-lived builder builds the cluster's own disk image with the
-# machine configuration embedded, writes it to its disk and powers off, and
-# that disk becomes the snapshot every node boots from with no user data.
+# hcloud-hrobot-talos-cluster runs a Talos Kubernetes cluster for one app, its
+# control plane on Hetzner Cloud and its worker on a Hetzner dedicated server
+# the app's Robot account rents, both from talos-cluster-kit. The control
+# plane is the kit's: a control-plane node in each of fsn1, nbg1 and hel1, a
+# private network whose default route goes to a gateway, a firewall with no
+# rule, an API and an ingress load balancer in fsn1, a private cluster
+# repository on GitHub, and the cluster's own disk image that a short-lived
+# builder writes and every node boots from.
 #
-# Every Hetzner resource carries the subscription id as a label and the
-# repository carries it as a topic. Upgrade converges what is missing and
-# never replaces a server. Unsubscribe deletes every server, load balancer,
-# snapshot, firewall and network, and the repository, and finishes once the
-# observers read every resource absent.
+# Subscribe names the dedicated server after the subscription, puts it on a
+# vSwitch whose subnet joins the Cloud network, and writes Talos onto its disk
+# from Hetzner's rescue system, in the background of the call that renders the
+# cluster's keys. The control-plane nodes take no app pod, so an app runs on
+# the worker. Every Cloud resource carries the subscription id as a label, the
+# repository carries it as a topic, and the server and vSwitch carry it in
+# their names. Unsubscribe deletes every Cloud resource and the repository,
+# cancels the vSwitch, and releases the server without cancelling it.
 apiVersion: mitstack/v1beta
 type: capability
 metadata:
@@ -22,23 +22,24 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.1.0
+  version: 0.2.0
   releaseClass: feature
   releaseNote: >-
-    The first release builds what hcloud-talos-cluster 0.11.2 builds, under
-    this block's own name, labels and repository topic, on block-kit v0.5.1.
-    Robot servers join as Talos workers in a later release.
+    A dedicated server joins the cluster as its Talos worker over a vSwitch,
+    and app pods run on it alone. The control plane now comes from
+    talos-cluster-kit's controlplane package and builds what 0.1.0 built.
+    Subscribe takes the server's number as robotServerNumber, and the
+    hetzner connection must hold the Robot webservice login.
   description: >
-    Runs a three-node Talos Kubernetes cluster on Hetzner Cloud, a
-    control-plane node in each of fsn1, nbg1 and hel1 behind an API and an
-    ingress load balancer in fsn1, booted from its own image, with Argo CD
-    syncing a repository it creates.
+    Runs a Talos Kubernetes cluster with its control plane on three Hetzner
+    Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated
+    server joined over a vSwitch, with Argo CD syncing a repository it creates.
   lifecycle:
     endpoint: https://api.mitstack.dev/operators/hcloud-hrobot-talos-cluster/hook
     operations: [subscribe, unsubscribe, upgrade, validate]
     contract: kit/v1
-    # The image build, its snapshot and the nodes' first boot take up to 45m.
-    settleBudget: 60m
+    # The image build, its snapshot, the nodes' first boot and the worker's rescue install take up to 60m.
+    settleBudget: 75m
     verbConnections:
       validate: [hetzner, github]
       unsubscribe: [hetzner, github]
@@ -60,6 +61,12 @@ spec:
       type: hetzner.server
     - name: node-hel1
       type: hetzner.server
+    - name: dedicated-server
+      type: hetzner.dedicated-server
+    - name: vswitch
+      type: hetzner.vswitch
+    - name: robot-firewall
+      type: hetzner.robot-firewall
     - hetzner.kubernetes-cluster
   provides:
     - hetzner.kubernetes-cluster

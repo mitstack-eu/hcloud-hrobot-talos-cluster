@@ -76,5 +76,5 @@ jobs:
           persist-credentials: false
 
       - name: shellcheck
-        run: shellcheck scripts/*.sh robotworker/scripts/*.sh
+        run: shellcheck robotworker/scripts/*.sh
 

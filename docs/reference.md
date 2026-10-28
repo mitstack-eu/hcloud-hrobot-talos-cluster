@@ -29,9 +29,12 @@ The block provides the type `hetzner.kubernetes-cluster`, which the `provides`
 list in `manifest.yaml` declares. Kubernetes is the common system for running
 containers across several servers.
 
-The cluster belongs to one app alone. It has three servers, called nodes, one
-in each of Hetzner's three European locations: `fsn1` in Falkenstein, `nbg1`
-in Nuremberg and `hel1` in Helsinki.
+The cluster belongs to one app alone. Its control plane has three Cloud
+servers, called nodes, one in each of Hetzner's three European locations:
+`fsn1` in Falkenstein, `nbg1` in Nuremberg and `hel1` in Helsinki. Its worker
+is the Hetzner Robot server, a dedicated machine, that `robotServerNumber`
+names. The control-plane nodes keep Talos's `NoSchedule` taint, so an app's
+pods run on the worker alone.
 
 The block also creates a private GitHub repository for the cluster, named
 `<appName>-cluster`. Argo CD, a tool that runs inside the cluster, applies
@@ -53,8 +56,9 @@ what that repository holds to the cluster. A commit to the repository's
 | `enrolmentTokenSha256` | A fingerprint of the one-time token the cluster presents when it first signs up with mitstack, called enrolment. mitstack checks the presented token against it, so it needs the fingerprint before the cluster signs up | A base32 SHA-256 digest | Once the gateway and the repository exist, before the cluster is ready |
 | `repo` | The cluster repository's owner and name, recorded on the repository resource rather than the cluster | `acme/shop-cluster` | Once the repository exists with this subscription's mark, two GitHub topics the block sets on it |
 
-The cluster is ready once every resource exists and the newest node report
-names at least three nodes, every one Ready. The node report is a small
+The cluster is ready once the control plane stands, the worker is written, and
+the newest node report since the last Cloud node's creation names every Cloud
+node and the worker's hostname, every one Ready. The node report is a small
 workload inside the cluster that posts the nodes' state to mitstack every five
 minutes.
 
@@ -85,15 +89,15 @@ that describes the issuer and the key set that checks the token's signature.
 
 `mintIssuerBucket` in `identity.go` mints the bucket name from 16 random
 bytes, and `issuerURL` puts the subscription id under the bucket's address in
-`eu-central-1`, the one region the block uses. `install` in `install.go`
-labels the gateway with the bucket in the same call that mints the cluster's
-keys. The machine configuration that the builder bakes into the nodes' image
+`eu-central-1`, the one region the plane uses. Both, and `install` in
+`install.go`, which labels the gateway with the bucket in the same call that
+mints the cluster's keys, sit in talos-cluster-kit's `controlplane` package. The machine configuration that the builder bakes into the nodes' image
 names `issuerUrl` as the API server's service-account issuer.
 
 The platform creates the bucket and publishes the discovery document and the
 key set in it, acting through the issuer publisher role of the org's connected
 AWS account. An org with no such connection gets no bucket and no published
-files. `clusterState.present` in `observe.go` reads the label back. A cluster
+files. The kit's `Plane.Outputs` reads the label back. A cluster
 whose gateway lost the `mitstack.dev/issuer-bucket` label, such as to an edit
 by hand, reads unknown, and its status detail names the missing label.
 
@@ -105,15 +109,14 @@ when the gateway has no digest label. Its status detail then names what is
 missing.
 
 In a subscribe the operator kit observes the resources in manifest order and
-stops at the first one not present, so it reaches the cluster resource once
-all three nodes exist. A validate observes every resource.
-`clusterState.enrolment` in `observe.go` makes the outputs of a cluster not yet
-present, and `clusterState.present` makes those of a present one.
+stops at the first one not present. A validate observes every resource.
+`enrolment` in `observe.go` makes the outputs of a cluster not yet present, and
+the kit's `Plane.Outputs` makes those of a present one.
 
 ## Params
 
-The block reads three params: two you set, `appName` and `serverType`, and
-`hostsPlatform`, which you leave unset. Its manifest lists no `requires`, so
+The block reads four params: three you set, `appName`, `robotServerNumber` and
+`serverType`, and `hostsPlatform`, which you leave unset. Its manifest lists no `requires`, so
 no other block has to be in place first.
 
 `readParams` in `resource.go` reads the params. A subscribe with a param it
@@ -123,15 +126,19 @@ column.
 | Param | Required | What it sets | Allowed values |
 |---|---|---|---|
 | `appName` | Yes | The name of the cluster repository, `<appName>-cluster` | Any name. An empty one is refused with `missing-param` |
-| `serverType` | No, `cx33` when empty | The Hetzner server type of each of the three nodes, and of the short-lived builder that makes the cluster's disk image | `cx23`, `cx33`, `cx43`, `cx53`, `cpx32`, `cpx52` or `cpx62`, as `allowedServerTypes` lists. Any other is refused with `invalid-param` |
+| `robotServerNumber` | Yes | The Robot number of the dedicated server your account rents, which becomes the cluster's worker | A positive whole number. An empty one is refused with `missing-param`, and any other value with `invalid-param` |
+| `serverType` | No, `cx33` when empty | The Hetzner server type of each of the three Cloud nodes, of the short-lived builder that makes the cluster's disk image, and of the worker's short-lived image server | `cx23`, `cx33`, `cx43`, `cx53`, `cpx32`, `cpx52` or `cpx62`, which `controlplane.ServerTypes` in the kit lists. Any other is refused with `invalid-param` |
 | `hostsPlatform` | No | Nothing you can use today: this release builds no cluster that hosts mitstack's own stores | Leave it unset. `true` is refused with `invalid-param` |
 
 Every type in that list is an x86 type, because the cluster's disk image is
-built for x86.
+built for x86. Beyond the param checks, a subscribe also reads the dedicated
+server and refuses one it cannot adopt, as
+[Build progress and failures](build-progress-and-failures.md#refusals-and-what-to-do-about-them)
+lists.
 
 ## Connections
 
-The connections give the block its tokens, and subscribe needs both. Validate
+The connections give the block its tokens and logins, and subscribe needs both. Validate
 is the read-only check mitstack sends while a subscription is being built. The
 manifest's `verbConnections` names both connections for validate and
 unsubscribe, so mitstack sends their tokens on those requests as well.
@@ -139,15 +146,17 @@ unsubscribe, so mitstack sends their tokens on those requests as well.
 | Connection | What the block reads from it | What the block does with it | When it is missing |
 |---|---|---|---|
 | Hetzner | `api_token`, a Hetzner Cloud project's API token, read by `hetznerToken` in `resource.go` | Creates and deletes every server, load balancer, network, firewall and snapshot in that project, which Hetzner bills | Refused with `missing-hetzner-access` |
+| Hetzner | `robot_user` and `robot_password`, the Robot webservice login, read by `robotLogin` in `resource.go` | Names and releases the dedicated server, creates and cancels its vSwitch, and writes its firewall. The login reaches every server, vSwitch, firewall and key of the Robot account. The block acts only on the server `robotServerNumber` names and the vSwitch named for the subscription | Refused with `missing-robot-access`. At unsubscribe the Cloud resources are still deleted, and the refusal is `robot-left-in-place` |
 | GitHub | `token`, `owner` and the GitHub API address mitstack sends with them, read by `dialGitHub` in `repository.go` | Creates, reads and deletes the cluster repository under `owner` | Refused with `missing-github-access` |
 
 ## Host settings
 
 The operator reads its settings from the environment its host gives it, in
-`main.go` and `repository.go`.
+`main.go`, `resource.go` and `repository.go`.
 
 | Variable | Required | What it sets |
 |---|---|---|
 | `MITSTACK_JWKS_URL` | Yes. The operator exits at start when it is unset | The address where mitstack publishes its signing keys, which the operator checks each request against |
 | `LISTEN_ADDR` | No, `:8080` when unset | The address the operator's web service listens on |
+| `MITSTACK_EGRESS_IPV4` | Yes, for a subscribe | The operator's public IPv4 address, the one address the dedicated server's firewall admits while the rescue session runs. A subscribe with it unset or not an IPv4 address is refused with `egress-address-unset` |
 | `MITSTACK_GITHUB_API_HOSTS` | No | A comma-separated list of GitHub API hosts the operator accepts beside `api.github.com` |

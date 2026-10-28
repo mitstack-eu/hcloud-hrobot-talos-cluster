@@ -2,99 +2,144 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
 	"github.com/mitstack-eu/block-kit/contract"
 	"github.com/mitstack-eu/block-kit/handler"
+	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 )
 
-// observers judge every declared resource by the labels and topics it carries, never by a recorded identity,
-// so an unsubscribe of a subscription the engine never recorded still settles from what the provider holds.
+// observers judge every declared resource by the labels, names and topics it carries, never by a recorded identity,
+// so an unsubscribe of a subscription the engine never recorded still settles from what the providers hold.
 func observers() map[string]handler.Observer {
+	gw := controlplane.GatewayLocation
 	out := map[string]handler.Observer{
-		resNetwork:    labelledObserver{kind: "network", list: listNetworks},
-		resFirewall:   labelledObserver{kind: "firewall", list: listFirewalls},
-		resGateway:    labelledObserver{kind: "gateway", list: listGateways},
-		resRepository: repositoryObserver{},
-		resSeedCommit: seedCommitObserver{},
-		resCluster:    clusterObserver{},
-		located(resPrivateLB, gatewayLocation): labelledObserver{
-			kind: gatewayLocation + " API load balancer", list: listLoadBalancersIn(roleAPI, gatewayLocation),
-		},
-		located(resPublicLB, gatewayLocation): labelledObserver{
-			kind: gatewayLocation + " ingress load balancer", list: listLoadBalancersIn(roleIngress, gatewayLocation),
-		},
+		resNetwork:  labelledObserver{kind: "network", list: func(st controlplane.State) []int64 { return controlplane.IDs(st.Networks, networkID) }},
+		resFirewall: labelledObserver{kind: "firewall", list: func(st controlplane.State) []int64 { return controlplane.IDs(st.Firewalls, firewallID) }},
+		resGateway: labelledObserver{kind: "gateway", list: func(st controlplane.State) []int64 {
+			return controlplane.IDs(st.Servers[controlplane.RoleGateway], controlplane.ServerID)
+		}},
+		located(resPrivateLB, gw): labelledObserver{kind: gw + " API load balancer", list: loadBalancersIn(controlplane.RoleAPI, gw)},
+		located(resPublicLB, gw):  labelledObserver{kind: gw + " ingress load balancer", list: loadBalancersIn(controlplane.RoleIngress, gw)},
+		resRepository:             repositoryObserver{},
+		resSeedCommit:             seedCommitObserver{},
+		resCluster:                clusterObserver{},
+		resDedicatedServer:        robotObserver{judge: judgeDedicatedServer},
+		resVSwitch:                robotObserver{judge: judgeVSwitch},
+		resRobotFirewall:          robotObserver{judge: judgeRobotFirewall},
 	}
-	for _, loc := range clusterLocations {
-		out[located(resNode, loc)] = labelledObserver{kind: loc + " node", list: listNodesIn(loc)}
+	for _, loc := range controlplane.Locations {
+		out[located(resNode, loc)] = labelledObserver{kind: loc + " node", list: func(st controlplane.State) []int64 {
+			return controlplane.IDs(controlplane.ServersIn(st.Servers[controlplane.RoleNode], loc), controlplane.ServerID)
+		}}
 	}
 	return out
 }
 
-type labelledLister func(ctx context.Context, api hetznerAPI, subID string) ([]int64, error)
+func located(resource, loc string) string { return resource + "-" + loc }
+
+func networkID(n controlplane.Network) int64 { return n.ID }
+
+func firewallID(f controlplane.Firewall) int64 { return f.ID }
+
+func loadBalancersIn(r controlplane.Role, loc string) func(controlplane.State) []int64 {
+	return func(st controlplane.State) []int64 {
+		return controlplane.IDs(controlplane.LoadBalancersIn(st.LoadBalancers[r], loc), controlplane.LoadBalancerID)
+	}
+}
 
 // labelledObserver reads one kind: present when exactly one resource carries the labels, absent when none does.
 type labelledObserver struct {
 	kind string
-	list labelledLister
+	list func(controlplane.State) []int64
 }
 
 func (o labelledObserver) ObserveResource(ctx context.Context, r contract.ResourceRef) (contract.Observation, error) {
-	api, refused, ok := hetznerReader(r.Desired)
+	p, refused, ok := hetznerReader(r.Desired)
 	if !ok {
 		return refused, nil
 	}
-	ids, err := o.list(ctx, api, r.Desired.SubscriptionID)
+	st, err := p.Read(ctx)
 	if err != nil {
-		return contract.Observation{}, fmt.Errorf("listing the subscription's %ss: %w", o.kind, err)
+		return contract.Observation{}, err
 	}
-	switch len(ids) {
+	switch ids := o.list(st); len(ids) {
 	case 0:
 		return contract.Observation{State: contract.Absent, StatusDetail: "no " + o.kind + " carries this subscription's labels"}, nil
 	case 1:
 		return contract.Observation{State: contract.Present, StatusDetail: fmt.Sprintf("%s %d carries this subscription's labels", o.kind, ids[0])}, nil
 	default:
-		return unknown(duplicatesDetail(o.kind, ids)), nil
+		return unknown(controlplane.DuplicatesDetail(o.kind, ids)), nil
 	}
 }
 
-func enrolmentOutputs(digest, repoURL string) map[string]string {
-	return map[string]string{"enrolmentTokenSha256": digest, "clusterRepoUrl": repoURL}
+// robotObserver reads the worker's Robot resources, which carry the subscription in their name.
+type robotObserver struct {
+	judge func(t robotTarget, st robotState) contract.Observation
 }
 
-func listNetworks(ctx context.Context, api hetznerAPI, subID string) ([]int64, error) {
-	networks, err := api.ListNetworks(ctx, subscriptionSelector(subID))
-	return idsOf(networks, func(n hcNetwork) int64 { return n.ID }), err
-}
-
-func listFirewalls(ctx context.Context, api hetznerAPI, subID string) ([]int64, error) {
-	firewalls, err := api.ListFirewalls(ctx, subscriptionSelector(subID))
-	return idsOf(firewalls, func(f hcFirewall) int64 { return f.ID }), err
-}
-
-func listLoadBalancersIn(r role, loc string) labelledLister {
-	return func(ctx context.Context, api hetznerAPI, subID string) ([]int64, error) {
-		lbs, err := api.ListLoadBalancers(ctx, roleSelector(subID, r))
-		return idsOf(loadBalancersIn(lbs, loc), loadBalancerID), err
+func (o robotObserver) ObserveResource(ctx context.Context, r contract.ResourceRef) (contract.Observation, error) {
+	t, refused, ok := robotReader(r.Desired)
+	if !ok {
+		return refused, nil
 	}
-}
-
-func listGateways(ctx context.Context, api hetznerAPI, subID string) ([]int64, error) {
-	gateways, err := api.ListServers(ctx, roleSelector(subID, roleGateway))
-	return idsOf(gateways, serverID), err
-}
-
-func listNodesIn(loc string) labelledLister {
-	return func(ctx context.Context, api hetznerAPI, subID string) ([]int64, error) {
-		servers, err := api.ListServers(ctx, roleSelector(subID, roleNode))
-		return idsOf(serversIn(servers, loc), serverID), err
+	st, err := t.read(ctx)
+	if robot.ErrorCode(err) == "SERVER_NOT_FOUND" {
+		return contract.Observation{State: contract.Absent, StatusDetail: fmt.Sprintf("Robot holds no dedicated server %d", t.server)}, nil
 	}
+	if err != nil {
+		return contract.Observation{}, err
+	}
+	return o.judge(t, st), nil
+}
+
+func judgeDedicatedServer(t robotTarget, st robotState) contract.Observation {
+	if st.server.Name != t.name {
+		return contract.Observation{State: contract.Absent, StatusDetail: fmt.Sprintf("dedicated server %d is named %q, not %s", t.server, st.server.Name, t.name)}
+	}
+	return contract.Observation{State: contract.Present, StatusDetail: fmt.Sprintf("dedicated server %d in %s is named %s", t.server, st.server.DC, t.name)}
+}
+
+func judgeVSwitch(t robotTarget, st robotState) contract.Observation {
+	switch {
+	case st.vswitches == 0:
+		return contract.Observation{State: contract.Absent, StatusDetail: "no uncancelled vSwitch is named " + t.name}
+	case st.vswitches > 1:
+		return unknown(fmt.Sprintf("%d vSwitches are named %s", st.vswitches, t.name))
+	case !st.onSwitch:
+		return unknown(fmt.Sprintf("vSwitch %d does not carry dedicated server %d", st.vswitch.ID, t.server))
+	}
+	return contract.Observation{State: contract.Present, StatusDetail: fmt.Sprintf("vSwitch %d on VLAN %d carries dedicated server %d", st.vswitch.ID, st.vswitch.VLAN, t.server)}
+}
+
+func judgeRobotFirewall(t robotTarget, st robotState) contract.Observation {
+	switch {
+	case st.server.Name != t.name:
+		return contract.Observation{State: contract.Absent, StatusDetail: fmt.Sprintf("dedicated server %d is not named %s, so its firewall is not the cluster's", t.server, t.name)}
+	case !holdsWorkerRules(st.firewall, t.firewall()):
+		return unknown(fmt.Sprintf("the firewall of dedicated server %d is %s and does not admit the cluster's network", t.server, st.firewall.Status))
+	}
+	return contract.Observation{State: contract.Present, StatusDetail: fmt.Sprintf("the firewall of dedicated server %d is active and admits the cluster's network", t.server)}
+}
+
+// robotReader answers Unknown, before any call, for a request the worker's Robot resources cannot be read with.
+func robotReader(d contract.Desired) (robotTarget, contract.Observation, bool) {
+	rb, err := robotLogin(d)
+	if err != nil {
+		return robotTarget{}, unknown("the dedicated server cannot be read: " + refusalDetail(err)), false
+	}
+	number, err := robotServerNumber(d)
+	if err != nil {
+		return robotTarget{}, unknown("the dedicated server cannot be named: " + refusalDetail(err)), false
+	}
+	if !controlplane.ValidLabelValue(d.SubscriptionID) {
+		return robotTarget{}, unknown("the subscription id is not a valid label value, so the worker's Robot names cannot be formed"), false
+	}
+	p := newPlane(nil, d.SubscriptionID, d.Params["appName"])
+	return robotTarget{robot: rb, server: number, name: robotName(d.SubscriptionID), plane: p}, contract.Observation{}, true
 }
 
 // repositoryObserver reads the cluster repository from GitHub alone; one without the subscription's mark is not the cluster's.
@@ -145,31 +190,31 @@ func (clusterObserver) ObserveResource(ctx context.Context, r contract.ResourceR
 	return observeCluster(ctx, r.Desired)
 }
 
-// hetznerReader answers Unknown, before any call, for a request the subscription's resources cannot be read with.
-func hetznerReader(d contract.Desired) (hetznerAPI, contract.Observation, bool) {
+// hetznerReader answers Unknown, before any call, for a request the subscription's Cloud resources cannot be read with.
+func hetznerReader(d contract.Desired) (controlplane.Plane, contract.Observation, bool) {
 	token := d.Secrets["hetzner"]["api_token"]
 	if token == "" {
-		return nil, unknown("no Hetzner token on this call (secrets.hetzner.api_token is empty), so the cluster cannot be read"), false
+		return controlplane.Plane{}, unknown("no Hetzner token on this call (secrets.hetzner.api_token is empty), so the cluster cannot be read"), false
 	}
-	if !validSubscriptionID(d.SubscriptionID) {
-		return nil, unknown("the subscription id is not a valid Hetzner label value, so the cluster's resources cannot be found by it"), false
+	if !controlplane.ValidLabelValue(d.SubscriptionID) {
+		return controlplane.Plane{}, unknown("the subscription id is not a valid Hetzner label value, so the cluster's resources cannot be found by it"), false
 	}
-	return newHetznerAPI(token), contract.Observation{}, true
+	return newPlane(newCloudAPI(token), d.SubscriptionID, d.Params["appName"]), contract.Observation{}, true
 }
 
-// Observe reads the whole cluster: present once every resource is as the block makes it and the newest node report
-// since the last node's creation reads every node Ready; absent when no labelled resource or marked repository is left;
-// unknown, naming what is missing, in between.
+// Observe reads the whole cluster: present once the control plane stands as the block makes it, the worker is written
+// and the newest node report since the last node's creation reads every node Ready, the worker among them; absent when
+// no labelled resource or marked repository is left; unknown, naming what is missing, in between.
 func (r *blockResource) Observe(ctx context.Context, d contract.Desired) (contract.Observation, error) {
 	return observeCluster(ctx, d)
 }
 
 func observeCluster(ctx context.Context, d contract.Desired) (contract.Observation, error) {
-	api, refused, ok := hetznerReader(d)
+	p, refused, ok := hetznerReader(d)
 	if !ok {
 		return refused, nil
 	}
-	st, err := listCluster(ctx, api, d.SubscriptionID)
+	st, installing, err := readCluster(ctx, p, d.SubscriptionID)
 	if err != nil {
 		return contract.Observation{}, err
 	}
@@ -177,49 +222,76 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 	if err != nil {
 		return contract.Observation{}, err
 	}
-	if st.empty() && (repo.state == repoGone || repo.state == repoUnmarked) {
+	if st.Empty() && (repo.state == repoGone || repo.state == repoUnmarked) {
 		return contract.Observation{
 			State:        contract.Absent,
 			StatusDetail: "no server, load balancer, firewall, network or snapshot carries this subscription's labels, and " + repo.describe(),
 		}, nil
 	}
-	problems := st.problems(ctx, api)
+	problems := p.Problems(ctx, st)
 	if repo.state != repoPresent {
 		problems = append(problems, repo.describe())
 	}
+	if network, ok := st.Network(); ok && workerProgress(network) != workerWritten {
+		problems = append(problems, workerDetail(network))
+	}
 	if len(problems) == 0 {
-		if problem := reportProblem(ctx, d, st.servers[roleNode]); problem != "" {
+		if problem := reportProblem(ctx, d, st.Servers[controlplane.RoleNode], p.Name("worker")); problem != "" {
 			problems = append(problems, problem)
 		}
 	}
-	if len(problems) > 0 {
-		outputs, gap := st.enrolment(repo)
+	redrive, err := stepLeft(ctx, d, st, installing, repo)
+	if err != nil {
+		return contract.Observation{}, err
+	}
+	if len(problems) > 0 || redrive {
+		outputs, gap := enrolment(st, repo)
 		if gap != "" {
 			problems = append(problems, gap)
 		}
+		if len(problems) == 0 {
+			problems = append(problems, "a Robot resource of the worker needs putting back")
+		}
 		obs := unknown(strings.Join(problems, "; "))
-		obs.Outputs = outputs
-		obs.Redrive, err = stepLeft(ctx, d, api, st, repo)
-		return obs, err
+		obs.Outputs, obs.Redrive = outputs, redrive
+		return obs, nil
 	}
-	return st.present(d.SubscriptionID, repo.url), nil
+	outputs, detail := p.Outputs(st)
+	outputs["clusterRepoUrl"] = repo.url
+	return contract.Observation{
+		State:        contract.Present,
+		Outputs:      outputs,
+		StatusDetail: detail + ", the Robot worker is written, and the newest node report reads every node Ready",
+	}, nil
 }
 
-// stepLeft reports whether a subscribe sent now would take a step or refuse, read from what Hetzner and GitHub hold, so
-// the engine re-drives subscribe once the step in flight has finished, and never while it runs. A request the subscribe
-// refuses before reading the cluster asks for none, since its own subscribe was refused already.
-func stepLeft(ctx context.Context, d contract.Desired, api hetznerAPI, st clusterState, repo repoObservation) (bool, error) {
+func workerDetail(network controlplane.Network) string {
+	switch workerProgress(network) {
+	case workerRunning:
+		return "the Robot worker's install has run since " + workerProgressAt(network)
+	case workerFailed:
+		return "the Robot worker's install failed at " + workerProgressAt(network)
+	}
+	return "the Robot worker's install has not begun"
+}
+
+// stepLeft reports whether a subscribe sent now would take a step or refuse, read from what Hetzner, Robot and GitHub
+// hold, so the engine re-drives subscribe once the step in flight has finished, and never while it runs. A request the
+// subscribe refuses before reading the cluster asks for none, since its own subscribe was refused already.
+func stepLeft(ctx context.Context, d contract.Desired, st controlplane.State, installing bool, repo repoObservation) (bool, error) {
 	req, err := readEnsureRequest(d)
 	if err != nil || repo.state == repoUnknown {
 		return false, nil
 	}
-	c := convergence{api: api, state: st, req: req, repo: repoRead{exists: repo.state != repoGone, marked: repo.state == repoPresent}}
-	network, ok := st.network()
-	if c.refusal() != nil || !ok || !c.repo.exists {
-		return true, nil
-	}
-	_, ok, err = nextStep(ctx, c, network)
+	c := convergence{plane: req.plane(newCloudAPI(req.token)), state: st, installing: installing, req: req, repo: repoRead{exists: repo.state != repoGone, marked: repo.state == repoPresent}}
+	network, ok := st.Network()
 	var refused *handler.Refused
+	if err := c.refusal(ctx); errors.As(err, &refused) || !ok || !c.repo.exists {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+	_, ok, err = c.nextStep(ctx, network)
 	if errors.As(err, &refused) {
 		return true, nil
 	}
@@ -228,169 +300,12 @@ func stepLeft(ctx context.Context, d contract.Desired, api hetznerAPI, st cluste
 
 // enrolment gives a cluster not yet present the values a node's enrolment is judged against, once the gateway carries
 // its digest and the marked repository exists, so the platform holds them before any node can report.
-func (st clusterState) enrolment(repo repoObservation) (map[string]string, string) {
-	gw, ok := st.server(roleGateway)
-	switch {
-	case !ok || repo.state != repoPresent:
-		return nil, ""
-	case gw.Labels[keyEnrolmentSHA256] == "":
-		return nil, fmt.Sprintf("gateway %d has no %s label, so the cluster carries no enrolment outputs", gw.ID, keyEnrolmentSHA256)
+func enrolment(st controlplane.State, repo repoObservation) (map[string]string, string) {
+	digest, gap := st.EnrolmentDigest()
+	if digest == "" || repo.state != repoPresent {
+		return nil, gap
 	}
-	return enrolmentOutputs(gw.Labels[keyEnrolmentSHA256], repo.url), ""
-}
-
-func (st clusterState) present(subID, repoURL string) contract.Observation {
-	network, _ := st.network()
-	gw, _ := st.server(roleGateway)
-	endpoint, _ := st.loadBalancerIn(roleAPI, gatewayLocation)
-	ingress, _ := st.loadBalancerIn(roleIngress, gatewayLocation)
-	var nodes []string
-	for _, loc := range clusterLocations {
-		node, _ := st.nodeIn(loc)
-		nodes = append(nodes, fmt.Sprintf("%d in %s at %s", node.ID, loc, node.PrivateIPs[network.ID]))
-	}
-	byLocation, _ := json.Marshal(map[string]string{gatewayLocation: ingress.PublicIPv4})
-	outputs := enrolmentOutputs(gw.Labels[keyEnrolmentSHA256], repoURL)
-	outputs["privateEndpoint"] = "https://" + endpoint.PrivateIPs[network.ID] + ":" + strconv.Itoa(apiServerPort)
-	outputs["publicIpByLocation"] = string(byLocation)
-	outputs["subscriptionId"] = subID
-	outputs["issuerBucket"] = gw.Labels[keyIssuerBucket]
-	outputs["issuerUrl"] = issuerURL(gw.Labels[keyIssuerBucket], subID).String()
-	return contract.Observation{
-		State:   contract.Present,
-		Outputs: outputs,
-		StatusDetail: fmt.Sprintf("nodes %s are on network %d behind gateway %d, an API and an ingress load balancer in %s reach them, and the newest node report reads every node Ready",
-			strings.Join(nodes, ", "), network.ID, gw.ID, gatewayLocation),
-	}
-}
-
-// problems names every way the Hetzner half of the cluster falls short of present.
-func (st clusterState) problems(ctx context.Context, api hetznerAPI) []string {
-	missing := st.duplicates()
-	if len(missing) > 0 {
-		return missing
-	}
-	network, networkOK := st.network()
-	firewall, firewallOK := st.firewall()
-	if !networkOK {
-		missing = append(missing, "no network carries this subscription's labels")
-	}
-	if !firewallOK {
-		missing = append(missing, "no firewall carries this subscription's labels")
-	}
-	if builder, ok := st.server(roleBuilder); ok {
-		missing = append(missing, builder.buildDetail(ctx, api))
-	}
-	if snap, ok := st.snapshot(); !ok {
-		missing = append(missing, "no snapshot of the cluster's image carries this subscription's labels")
-	} else if snap.Status != snapshotAvailable {
-		missing = append(missing, fmt.Sprintf("snapshot %d of the cluster's image is %s", snap.ID, snap.Status))
-	}
-	if firewallOK && firewall.RuleCount > 0 {
-		missing = append(missing, fmt.Sprintf("firewall %d holds %d rules, and the cluster's firewall holds none", firewall.ID, firewall.RuleCount))
-	}
-	if !networkOK || !firewallOK {
-		return missing
-	}
-	missing = append(missing, st.gatewayProblems(network, firewall)...)
-	missing = append(missing, st.nodeProblems(network, firewall)...)
-	missing = append(missing, st.loadBalancerProblems(network)...)
-	return missing
-}
-
-// buildDetail says where the builder stands, judged against buildDeadline as builderStep judges it.
-func (b hcServer) buildDetail(ctx context.Context, api hetznerAPI) string {
-	created := b.Created.UTC().Format(time.RFC3339)
-	if b.Status != serverRunning {
-		return fmt.Sprintf("builder %d, created at %s, is %s", b.ID, created, b.Status)
-	}
-	state := "is building the cluster's image"
-	if clock().Sub(b.Created) >= buildDeadline {
-		state = fmt.Sprintf("did not power itself off within %s", buildDeadline)
-	}
-	return fmt.Sprintf("builder %d, created at %s, %s; %s", b.ID, created, state, readBuilderMetrics(ctx, api, b).summary())
-}
-
-func (st clusterState) gatewayProblems(network hcNetwork, firewall hcFirewall) []string {
-	gw, ok := st.server(roleGateway)
-	if !ok {
-		return []string{"no gateway carries this subscription's labels"}
-	}
-	var missing []string
-	if gw.Status != serverRunning {
-		missing = append(missing, fmt.Sprintf("gateway %d is %s", gw.ID, gw.Status))
-	}
-	if gw.PrivateIPs[network.ID] != gatewayAddress {
-		missing = append(missing, fmt.Sprintf("gateway %d is not on network %d at %s", gw.ID, network.ID, gatewayAddress))
-	}
-	if gw.PublicIPv4 == "" {
-		missing = append(missing, fmt.Sprintf("gateway %d has no public address", gw.ID))
-	}
-	if !slices.Contains(gw.FirewallIDs, firewall.ID) {
-		missing = append(missing, fmt.Sprintf("firewall %d is not applied to gateway %d", firewall.ID, gw.ID))
-	}
-	if gw.Labels[keyIssuerBucket] == "" {
-		missing = append(missing, fmt.Sprintf("gateway %d has no %s label, so the block cannot read the issuer its nodes sign for", gw.ID, keyIssuerBucket))
-	}
-	return missing
-}
-
-func (st clusterState) nodeProblems(network hcNetwork, firewall hcFirewall) []string {
-	var missing []string
-	for _, loc := range clusterLocations {
-		node, ok := st.nodeIn(loc)
-		if !ok {
-			missing = append(missing, "no node in "+loc+" carries this subscription's labels")
-			continue
-		}
-		if node.PrivateIPs[network.ID] == "" {
-			missing = append(missing, fmt.Sprintf("node %d has no address on network %d", node.ID, network.ID))
-		}
-		if node.PublicIPv4 != "" {
-			missing = append(missing, fmt.Sprintf("node %d holds the public address %s, and only the gateway may", node.ID, node.PublicIPv4))
-		}
-		if !slices.Contains(node.FirewallIDs, firewall.ID) {
-			missing = append(missing, fmt.Sprintf("firewall %d is not applied to node %d", firewall.ID, node.ID))
-		}
-	}
-	return missing
-}
-
-func (st clusterState) loadBalancerProblems(network hcNetwork) []string {
-	var missing []string
-	for _, lb := range []struct {
-		role   role
-		public bool
-	}{{roleAPI, false}, {roleIngress, true}} {
-		found, ok := st.loadBalancerIn(lb.role, gatewayLocation)
-		if !ok {
-			missing = append(missing, "no "+string(lb.role)+" load balancer in "+gatewayLocation+" carries this subscription's labels")
-			continue
-		}
-		missing = append(missing, found.reachProblems(network, lb.public)...)
-	}
-	return missing
-}
-
-func (lb hcLoadBalancer) reachProblems(network hcNetwork, public bool) []string {
-	var missing []string
-	if lb.PrivateIPs[network.ID] == "" {
-		missing = append(missing, fmt.Sprintf("load balancer %d is not on network %d", lb.ID, network.ID))
-	}
-	if lb.PublicInterface != public {
-		missing = append(missing, fmt.Sprintf("load balancer %d's public interface is %s, want %s", lb.ID, onOff(lb.PublicInterface), onOff(public)))
-	}
-	if !slices.Contains(lb.TargetSelectors, roleSelector(lb.Labels[keySubscription], roleNode)) {
-		missing = append(missing, fmt.Sprintf("load balancer %d does not target the subscription's nodes by label", lb.ID))
-	}
-	return missing
-}
-
-func onOff(on bool) string {
-	if on {
-		return "on"
-	}
-	return "off"
+	return map[string]string{"enrolmentTokenSha256": digest, "clusterRepoUrl": repo.url}, ""
 }
 
 type repoState int

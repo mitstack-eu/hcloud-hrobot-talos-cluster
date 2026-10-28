@@ -8,12 +8,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/mitstack-eu/block-kit/contract"
 	"github.com/mitstack-eu/block-kit/helpers/events"
 	"github.com/mitstack-eu/block-kit/observe"
+	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 )
 
 const operatorEventsPath = "/v1/webhooks/operator-events"
@@ -83,9 +85,9 @@ type reportedNode struct {
 	Ready bool   `json:"ready"`
 }
 
-// reportProblem names why the cluster has not yet reported every node Ready since the last of its nodes was created,
-// or "". A report naming fewer nodes than the cluster has servers for has not heard from every node.
-func reportProblem(ctx context.Context, d contract.Desired, nodes []hcServer) string {
+// reportProblem names why the cluster has not yet reported every node Ready since the last of its Cloud nodes was
+// created, or "". The report must name each Cloud node and the Robot worker by its hostname.
+func reportProblem(ctx context.Context, d contract.Desired, nodes []controlplane.Server, worker string) string {
 	last := lastCreated(nodes)
 	since := last.UTC().Format(time.RFC3339)
 	reports, err := nodeReports.NodeReports(ctx, d, d.SubscriptionID)
@@ -99,8 +101,11 @@ func reportProblem(ctx context.Context, d contract.Desired, nodes []hcServer) st
 	if newest == nil {
 		return "the cluster has sent no node report since the last node's creation at " + since
 	}
-	if len(newest) < len(nodes) {
-		return fmt.Sprintf("the newest node report names %d nodes, and the cluster has %d", len(newest), len(nodes))
+	if want := len(nodes) + 1; len(newest) < want {
+		return fmt.Sprintf("the newest node report names %d nodes, and the cluster has %d with its Robot worker", len(newest), want)
+	}
+	if !slices.ContainsFunc(newest, func(n reportedNode) bool { return n.Name == worker }) {
+		return fmt.Sprintf("the newest node report does not name the Robot worker %s", worker)
 	}
 	for _, n := range newest {
 		if !n.Ready {
@@ -110,7 +115,7 @@ func reportProblem(ctx context.Context, d contract.Desired, nodes []hcServer) st
 	return ""
 }
 
-func lastCreated(servers []hcServer) time.Time {
+func lastCreated(servers []controlplane.Server) time.Time {
 	var last time.Time
 	for _, s := range servers {
 		if s.Created.After(last) {

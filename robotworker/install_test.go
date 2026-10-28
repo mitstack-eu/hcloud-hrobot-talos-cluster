@@ -72,7 +72,7 @@ func ruleNames(rules []robot.Rule) []string {
 func assertCleanedUp(t *testing.T, h *harness) {
 	assert.Empty(t, h.robot.Keys(), "the one-time rescue key is deleted")
 	assert.Equal(t, []int64{1}, h.cloud.deleted, "the image server is deleted")
-	assert.Equal(t, ruleNames(h.installer.firewall(h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input),
+	assert.Equal(t, ruleNames(Firewall(h.installer.Cluster.Network, h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input),
 		"the worker firewall returns without the rescue SSH rule")
 	assert.Equal(t, "disk", h.robot.State(testServer).Booted)
 }
@@ -170,7 +170,7 @@ func TestInstall_RefusesARescueSystemWhoseHostKeyRobotDidNotName(t *testing.T) {
 	assert.Empty(t, h.rescue.sent, "nothing runs in a rescue system presenting another host key")
 	assert.Empty(t, h.cloud.created)
 	assert.Empty(t, h.robot.Keys())
-	assert.Equal(t, ruleNames(h.installer.firewall(h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input))
+	assert.Equal(t, ruleNames(Firewall(h.installer.Cluster.Network, h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input))
 }
 
 func TestInstall_StopsAndCleansUpWhenTheImageServerPresentsAnotherKey(t *testing.T) {
@@ -225,5 +225,5 @@ func TestInstall_GivesUpOnARescueSystemThatNeverAnswersTheHandshake(t *testing.T
 	}
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Empty(t, h.robot.Keys())
-	assert.Equal(t, ruleNames(h.installer.firewall(h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input))
+	assert.Equal(t, ruleNames(Firewall(h.installer.Cluster.Network, h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input))
 }

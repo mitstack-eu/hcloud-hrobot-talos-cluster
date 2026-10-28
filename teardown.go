@@ -10,8 +10,10 @@ import (
 	"github.com/mitstack-eu/block-kit/helpers/safe"
 )
 
-// Delete deletes every labelled Hetzner resource, the snapshot that holds every key of the cluster among them, even
-// without a usable GitHub connection, and then refuses, naming the repository it left in place.
+// Delete stops the worker's install, deletes every labelled Cloud resource, the snapshot that holds every key of the
+// cluster among them, cancels the vSwitch and releases the dedicated server without cancelling it, and deletes the
+// repository. Without a usable Robot login or GitHub connection it still deletes the Cloud resources, and then refuses,
+// naming what it left in place.
 func (r *blockResource) Delete(ctx context.Context, d contract.Desired) (map[string]string, error) {
 	token, err := hetznerToken(d)
 	if err != nil {
@@ -21,13 +23,26 @@ func (r *blockResource) Delete(ctx context.Context, d contract.Desired) (map[str
 	if err != nil {
 		return nil, err
 	}
-	gh, ghErr := dialClusterRepository(d)
-	if err := deleteLabelled(ctx, newHetznerAPI(token), subID); err != nil {
+	if err := stopJob(ctx, subID); err != nil {
 		return nil, err
 	}
-	if ghErr != nil {
+	gh, ghErr := dialClusterRepository(d)
+	if err := newPlane(newCloudAPI(token), subID, d.Params["appName"]).Delete(ctx); err != nil {
+		return nil, err
+	}
+	t, refused, robotOK := robotReader(d)
+	if robotOK {
+		if err := t.release(ctx); err != nil {
+			return nil, err
+		}
+	}
+	switch {
+	case !robotOK:
+		return nil, handler.Refuse("robot-left-in-place",
+			"the cluster's Hetzner Cloud resources are deleted, but the dedicated server and its vSwitch were left in place: %s", refused.StatusDetail)
+	case ghErr != nil:
 		return nil, handler.Refuse("repository-left-in-place",
-			"the cluster's Hetzner servers, load balancers, snapshot, firewall and network are deleted, but the cluster repository was left in place: %s",
+			"the cluster's Hetzner resources are deleted and the dedicated server is released, but the cluster repository was left in place: %s",
 			refusalDetail(ghErr))
 	}
 	return nil, deleteMarkedRepository(ctx, gh, d)
@@ -39,44 +54,6 @@ func dialClusterRepository(d contract.Desired) (*githubAccess, error) {
 		return nil, handler.Refuse("missing-param", `the app name is required to name the cluster repository: params["appName"] is empty`)
 	}
 	return dialGitHub(d, appName)
-}
-
-// deleteLabelled deletes servers and load balancers before the firewall and network they use, and the snapshot with them.
-func deleteLabelled(ctx context.Context, api hetznerAPI, subID string) error {
-	st, err := listCluster(ctx, api, subID)
-	if err != nil {
-		return err
-	}
-	for _, servers := range st.servers {
-		for _, s := range servers {
-			if err := api.DeleteServer(ctx, s.ID); err != nil {
-				return fmt.Errorf("deleting the cluster server %d: %w", s.ID, err)
-			}
-		}
-	}
-	for _, lbs := range st.loadBalancers {
-		for _, lb := range lbs {
-			if err := api.DeleteLoadBalancer(ctx, lb.ID); err != nil {
-				return fmt.Errorf("deleting the cluster load balancer %d: %w", lb.ID, err)
-			}
-		}
-	}
-	for _, snap := range st.snapshots {
-		if err := api.DeleteSnapshot(ctx, snap.ID); err != nil {
-			return fmt.Errorf("deleting the cluster snapshot %d: %w", snap.ID, err)
-		}
-	}
-	for _, fw := range st.firewalls {
-		if err := api.DeleteFirewall(ctx, fw.ID); err != nil {
-			return fmt.Errorf("deleting the cluster firewall %d: %w", fw.ID, err)
-		}
-	}
-	for _, n := range st.networks {
-		if err := api.DeleteNetwork(ctx, n.ID); err != nil {
-			return fmt.Errorf("deleting the cluster network %d: %w", n.ID, err)
-		}
-	}
-	return nil
 }
 
 // deleteMarkedRepository reads the mark just before the delete, and keeps a repository without it untouched.
