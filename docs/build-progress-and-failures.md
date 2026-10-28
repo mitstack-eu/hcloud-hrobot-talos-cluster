@@ -66,16 +66,22 @@ test `TestSubscribe_ASettleReDrivenEveryNineSecondsStaysInsideRobotsHourlyReques
 in `robot_limits_test.go` plays a 75-minute settle at one call every nine
 seconds and holds the server reads to 120 an hour at most.
 
-When Robot answers `403 RATE_LIMIT_EXCEEDED` anyway, the build waits instead of
-failing. Subscribe answers in progress and makes no Robot change. Validate
+When Robot answers a subscribe or validate `403 RATE_LIMIT_EXCEEDED` anyway, the
+build waits instead of failing. Subscribe answers in progress and makes no
+Robot change. Validate
 reads the worker's Robot resources as unknown, and the cluster too once any of
 it stands. Both details begin
 "Robot answered 403 RATE_LIMIT_EXCEEDED, so its hourly request limit is
 reached". Validate asks for no new subscribe while the limit holds, and the
 operator does not ask Robot the same read again within the minute. Once a read
-succeeds, the build carries on where it stopped. You need do nothing, unless
-something else on the same Robot account spends the allowance, such as a script
-of your own.
+succeeds, the next subscribe carries on where the last one stopped. You need do
+nothing, unless something else on the same Robot account spends the allowance,
+such as a script of your own.
+
+The worker's install runs in the operator's background and reads Robot afresh
+before each write. A `403 RATE_LIMIT_EXCEEDED` there ends the install like any
+other error, and the next subscribe refuses with `worker-install-failed`, as
+[When a build fails](#when-a-build-fails) describes.
 
 ## Refusals and what to do about them
 

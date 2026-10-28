@@ -194,8 +194,7 @@ type convergence struct {
 
 // Ensure takes one step that waits on Hetzner, so each call ends well inside the platform's two-minute verb timeout, and
 // refuses before any change a cluster it cannot act on unambiguously, a repository without the subscription's mark, or
-// a dedicated server it may not adopt. The network and the repository need no wait, so they come first. While Robot
-// refuses past its request limit, it waits without a change in Robot.
+// a dedicated server it may not adopt. The network and the repository need no wait, so they come first.
 func (r *blockResource) Ensure(ctx context.Context, d contract.Desired) error {
 	return waitOutRobotLimit(ensure(ctx, d))
 }
