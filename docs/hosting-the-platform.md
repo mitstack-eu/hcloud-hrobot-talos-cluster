@@ -1,16 +1,30 @@
 # A cluster that hosts mitstack
 
-This page covers the cluster the block builds when `hostsPlatform` is `true`:
-the one cluster that runs mitstack's own stores, OpenBao for secrets and
-Sealed Secrets for encrypted manifests. It is for whoever runs that cluster
-for mitstack. No app's cluster sets the param, so an app owner can skip it.
+This page covers the one cluster that runs mitstack's own stores: OpenBao,
+which keeps secrets, and Sealed Secrets, which opens encrypted manifests inside
+the cluster. It is for whoever runs that cluster for mitstack. No app's cluster
+hosts mitstack, so an app owner can skip it.
+
+This repository is a block, a service mitstack builds for an app when the app
+subscribes to it. A subscribe is that request, and it carries params such as
+`appName`, which [Params, connections and outputs](reference.md#params) lists.
+The block builds the cluster with talos-cluster-kit, a Go library both Talos
+blocks share, which this page calls the kit. The install is the part of a
+subscribe that mints the cluster's keys and builds its first nodes.
 
 ## What you give
 
-A hosting subscribe needs one more param, `openbaoSealKeyRecipient`. It holds
+A subscribe for this cluster sets two params beside `appName`:
+`hostsPlatform` set to `true`, and `openbaoSealKeyRecipient`. The second holds
 one armored OpenPGP public key, the key you can decrypt with. The install hands
 out the cluster's own keys only as messages encrypted to it, so nobody stores
 or seals one by hand.
+
+To make the value from a key in your GnuPG keyring, export its public half:
+
+```bash
+gpg --armor --export admin@example.com
+```
 
 `readRecipient` in `hosting.go` reads it before anything is built. An empty
 value is refused with `missing-param`. A value that is not one public key that
@@ -31,9 +45,13 @@ that GitHub grants on that one repository. The install creates both.
 An earlier install's private halves went with that install, so its keys can
 never be used again. It then generates both keys, registers each public half
 with GitHub, and seals each private half to the cluster's own Sealed Secrets
-certificate. The private halves reach the cluster only sealed, inside the
-hosting set the serving server hands the builder once. A deploy key with any
-other title, such as one you added yourself, is left alone.
+certificate. A deploy key with any other title, such as one you added
+yourself, is left alone.
+
+The private halves reach the cluster only sealed, inside the hosting set, the
+manifests of mitstack's stores. The builder, a short-lived server that makes
+the cluster's disk image, fetches that set once from a second short-lived
+server, the serving server, and both are deleted once the image is made.
 
 Unsubscribe deletes the repository, and GitHub deletes its deploy keys with it.
 
@@ -80,10 +98,13 @@ copy of one of those files.
 four files, the cluster reads unknown with a detail such as `the cluster
 repository acme/shop-cluster holds no openbao-init.asc yet`.
 
-To read one, save the output to a file and decrypt it with your key:
+Each output is a copy of a file in the cluster repository, so you can read it
+from GitHub as well as from the outputs mitstack records for the cluster. This
+command fetches the seal key's file and decrypts it with your key:
 
 ```bash
-gpg --decrypt openbao-seal-key.asc | base64 -d > openbao-seal.key
+gh api repos/acme/shop-cluster/contents/openbao-seal-key.asc --jq .content \
+  | base64 -d | gpg --decrypt | base64 -d > openbao-seal.key
 ```
 
 ## Where the stores run

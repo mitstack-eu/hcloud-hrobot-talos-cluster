@@ -61,9 +61,10 @@ token and the cluster's certificate authorities. It travels another way:
    image with `curl --pinnedpubkey`, so it accepts only the server holding that
    TLS key.
 5. talos-cluster-kit's serve program, `serve.Program` in its `serve` package,
-   serves one whole copy over TLS 1.3 to the worker's vSwitch address alone. It deletes the TLS key once loaded, and the image once
-   the worker read a whole copy and closed the connection. The install then
-   deletes the image server.
+   serves one whole copy over TLS 1.3 to the worker's vSwitch address alone.
+   It deletes the TLS key once loaded, and the image once the worker read a
+   whole copy and closed the connection. The install then deletes the image
+   server.
 
 An attacker who answers the rescue system's SSH learns only the pin and the
 addresses. An attacker who answers on the vSwitch cannot present the pinned
