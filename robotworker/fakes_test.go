@@ -149,10 +149,11 @@ func (h *rescueHost) disk(t *testing.T, name string) string {
 }
 
 // fakeCloud runs the serve program from the image server's user data on 127.0.0.1, serving an image that embeds the
-// worker configuration the user data carries, and with otherKey a TLS key other than the pinned one.
+// worker configuration the user data carries, with otherKey a TLS key other than the pinned one, and with silent none.
 type fakeCloud struct {
 	t        *testing.T
 	otherKey bool
+	silent   bool
 	created  []ImageServer
 	deleted  []int64
 	image    string
@@ -175,6 +176,9 @@ func (c *fakeCloud) CreateImageServer(_ context.Context, s ImageServer) (int64, 
 	for name, content := range map[string]string{"tls.crt": cert, "tls.key": key, "image.raw": c.image, "serve-image.py": files[serveProgPath]} {
 		writeFile(c.t, filepath.Join(c.dir, name), content)
 	}
+	if c.silent {
+		return int64(len(c.created)), nil
+	}
 	c.serve = exec.Command("python3", "-I", filepath.Join(c.dir, "serve-image.py"), "127.0.0.1", strconv.Itoa(servePort),
 		filepath.Join(c.dir, "tls.crt"), filepath.Join(c.dir, "tls.key"), filepath.Join(c.dir, "image.raw"))
 	require.NoError(c.t, c.serve.Start())
@@ -190,6 +194,9 @@ func (c *fakeCloud) ImageServerAddress(context.Context, int64) (netip.Addr, erro
 // DeleteImageServer gives the serve program a moment to exit on its own once it served, before it stops it.
 func (c *fakeCloud) DeleteImageServer(_ context.Context, id int64) error {
 	c.deleted = append(c.deleted, id)
+	if c.serve == nil {
+		return nil
+	}
 	select {
 	case <-c.exited:
 	case <-time.After(2 * time.Second):

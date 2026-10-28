@@ -4,6 +4,7 @@ package robotworker
 
 import (
 	"context"
+	"net"
 	"net/netip"
 	"path/filepath"
 	"slices"
@@ -51,8 +52,10 @@ func newHarness(t *testing.T, dc string) *harness {
 	}
 }
 
-func (h *harness) install(t *testing.T) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+func (h *harness) install(*testing.T) error { return h.installWithin(time.Minute) }
+
+func (h *harness) installWithin(d time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
 	return h.installer.Install(ctx, h.worker)
 }
@@ -179,4 +182,48 @@ func TestInstall_StopsAndCleansUpWhenTheImageServerPresentsAnotherKey(t *testing
 	require.ErrorContains(t, err, "other than the pinned")
 	assert.Equal(t, oldDisk, h.rescue.disk(t, testDisk))
 	assertCleanedUp(t, h)
+}
+
+func TestInstall_LeavesTheDisksAloneWhenTheImageServerNeverAnswers(t *testing.T) {
+	h := newHarness(t, "FSN1-DC14")
+	h.cloud.silent = true
+	h.rescue.env = append(h.rescue.env, "RESCUE_FETCH_ATTEMPTS=3")
+
+	err := h.install(t)
+
+	require.ErrorContains(t, err, "gave no answer")
+	assert.Equal(t, oldDisk, h.rescue.disk(t, testDisk))
+	for _, call := range h.rescue.tools.Calls(t) {
+		assert.NotRegexp(t, "^(wipefs|sgdisk|mdadm) ", call, "no disk is cleared before the image server answers")
+	}
+	assertCleanedUp(t, h)
+}
+
+func TestInstall_GivesUpOnARescueSystemThatNeverAnswersTheHandshake(t *testing.T) {
+	h := newHarness(t, "HEL1-DC1")
+	silent, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { silent.Close() })
+	go func() {
+		for {
+			conn, err := silent.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { conn.Close() })
+		}
+	}()
+	h.installer.RescueAddress = func(string) string { return silent.Addr().String() }
+	done := make(chan error, 1)
+
+	go func() { done <- h.installWithin(2 * time.Second) }()
+
+	select {
+	case err = <-done:
+	case <-time.After(8 * time.Second):
+		t.Fatal("the install still waits on the handshake after its context ended")
+	}
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Empty(t, h.robot.Keys())
+	assert.Equal(t, ruleNames(h.installer.firewall(h.worker).Input), ruleNames(h.robot.Firewall(testServer).Input))
 }
