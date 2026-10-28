@@ -186,8 +186,10 @@ func (req ensureRequest) plane(api controlplane.API) controlplane.Plane {
 type convergence struct {
 	plane controlplane.Plane
 	state controlplane.State
-	req   ensureRequest
-	repo  repoRead
+	// installing is whether this process ran the subscription's install while state was read.
+	installing bool
+	req        ensureRequest
+	repo       repoRead
 }
 
 // Ensure takes one step that waits on Hetzner, so each call ends well inside the platform's two-minute verb timeout, and
@@ -217,7 +219,7 @@ func (r *blockResource) Ensure(ctx context.Context, d contract.Desired) error {
 }
 
 func readConvergence(ctx context.Context, plane controlplane.Plane, req ensureRequest) (convergence, error) {
-	st, err := plane.Read(ctx)
+	st, installing, err := readCluster(ctx, plane, req.subID)
 	if err != nil {
 		return convergence{}, err
 	}
@@ -225,7 +227,7 @@ func readConvergence(ctx context.Context, plane controlplane.Plane, req ensureRe
 	if err != nil {
 		return convergence{}, err
 	}
-	c := convergence{plane: plane, state: st, req: req, repo: repo}
+	c := convergence{plane: plane, state: st, installing: installing, req: req, repo: repo}
 	return c, c.refusal(ctx)
 }
 

@@ -68,6 +68,14 @@ func jobRunning(subID string) bool {
 	return jobs.running[subID] != nil
 }
 
+// readCluster reads the cluster and whether this process runs its install, asked on both sides of the read, since an
+// install that ends during the read records its outcome only before it leaves jobs.
+func readCluster(ctx context.Context, p controlplane.Plane, subID string) (controlplane.State, bool, error) {
+	installing := jobRunning(subID)
+	st, err := p.Read(ctx)
+	return st, installing || jobRunning(subID), err
+}
+
 // stopJob cancels the subscription's install and waits for its clean-up, which returns the server's firewall and boot.
 func stopJob(ctx context.Context, subID string) error {
 	jobs.Lock()
@@ -165,7 +173,7 @@ func (c convergence) workerRefusal(ctx context.Context) error {
 			"the install of dedicated server %d as the cluster's worker failed at %s, and the operator's log says why; the cluster's keys it needs are gone, so unsubscribe and subscribe again",
 			c.req.params.robotServer, workerProgressAt(network))
 	case workerRunning:
-		if !jobRunning(c.req.subID) {
+		if !c.installing {
 			return handler.Refuse("worker-install-lost",
 				"the install of dedicated server %d began at %s, but the operator restarted during it, and the cluster's keys it needs went with it; unsubscribe and subscribe again",
 				c.req.params.robotServer, workerProgressAt(network))

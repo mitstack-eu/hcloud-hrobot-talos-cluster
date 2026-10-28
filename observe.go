@@ -214,7 +214,7 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 	if !ok {
 		return refused, nil
 	}
-	st, err := p.Read(ctx)
+	st, installing, err := readCluster(ctx, p, d.SubscriptionID)
 	if err != nil {
 		return contract.Observation{}, err
 	}
@@ -240,7 +240,7 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 			problems = append(problems, problem)
 		}
 	}
-	redrive, err := stepLeft(ctx, d, st, repo)
+	redrive, err := stepLeft(ctx, d, st, installing, repo)
 	if err != nil {
 		return contract.Observation{}, err
 	}
@@ -278,12 +278,12 @@ func workerDetail(network controlplane.Network) string {
 // stepLeft reports whether a subscribe sent now would take a step or refuse, read from what Hetzner, Robot and GitHub
 // hold, so the engine re-drives subscribe once the step in flight has finished, and never while it runs. A request the
 // subscribe refuses before reading the cluster asks for none, since its own subscribe was refused already.
-func stepLeft(ctx context.Context, d contract.Desired, st controlplane.State, repo repoObservation) (bool, error) {
+func stepLeft(ctx context.Context, d contract.Desired, st controlplane.State, installing bool, repo repoObservation) (bool, error) {
 	req, err := readEnsureRequest(d)
 	if err != nil || repo.state == repoUnknown {
 		return false, nil
 	}
-	c := convergence{plane: req.plane(newCloudAPI(req.token)), state: st, req: req, repo: repoRead{exists: repo.state != repoGone, marked: repo.state == repoPresent}}
+	c := convergence{plane: req.plane(newCloudAPI(req.token)), state: st, installing: installing, req: req, repo: repoRead{exists: repo.state != repoGone, marked: repo.state == repoPresent}}
 	network, ok := st.Network()
 	var refused *handler.Refused
 	if err := c.refusal(ctx); errors.As(err, &refused) || !ok || !c.repo.exists {
