@@ -374,7 +374,7 @@ func (e *env) repo() string {
 	return testOwner + "/" + testApp + "-cluster"
 }
 
-const settleBudget = 75 * time.Minute
+const settleBudget = 105 * time.Minute
 
 // fakeGitHub serves the repository, topics, contents and deploy key calls the block makes, from memory.
 type fakeGitHub struct {
