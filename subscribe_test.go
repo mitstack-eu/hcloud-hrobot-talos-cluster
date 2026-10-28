@@ -4,9 +4,11 @@ package main
 // the background, from the call that renders the cluster's keys.
 
 import (
+	"context"
 	"errors"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -217,6 +219,35 @@ func TestSubscribe_AnInstallTheOperatorLostOrThatFailedIsRefusedAndObservedSo(t 
 			assert.True(t, obs.Redrive, "an observe that a subscribe would refuse asks for the subscribe that names the refusal")
 		})
 	}
+}
+
+// finishDuringRead answers the cluster's network as Hetzner held it, then lets the queued install finish before the
+// caller goes on, as an install that ends while a call reads the cluster does.
+type finishDuringRead struct {
+	controlplane.API
+	once   sync.Once
+	finish func()
+}
+
+func (f *finishDuringRead) ListNetworks(ctx context.Context, labelSelector string) ([]controlplane.Network, error) {
+	networks, err := f.API.ListNetworks(ctx, labelSelector)
+	f.once.Do(f.finish)
+	return networks, err
+}
+
+func TestSubscribe_AnInstallThatFinishesWhileTheCallReadsTheClusterIsNotRefusedAsLost(t *testing.T) {
+	e := newEnv(t)
+	e.cloud.InstantBuild = true
+	require.NoError(t, e.converge())
+	require.Equal(t, 1, e.queuedJobs(), "the install waiting to run")
+	require.Equal(t, workerRunning, e.network().Labels[keyWorkerInstall], "the worker's progress before the call")
+	read := &finishDuringRead{API: e.cloud, finish: e.runJobs}
+	swap(t, &newCloudAPI, func(string) controlplane.API { return read })
+
+	err := e.ensure()
+
+	require.NoError(t, err)
+	assert.Equal(t, workerWritten, e.network().Labels[keyWorkerInstall], "the worker's progress after the call")
 }
 
 func TestSubscribe_PutsBackTheRobotResourceAWrittenWorkerLost(t *testing.T) {
