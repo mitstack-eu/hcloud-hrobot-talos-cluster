@@ -22,14 +22,14 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.0
-  releaseClass: feature
+  version: 0.3.1
+  releaseClass: correctness-fix
   releaseNote: >-
-    A cluster with hostsPlatform set installs mitstack's own stores with no
-    key a person provides. The install creates a write and a read-only deploy
-    key on the cluster repository, seals them inside the cluster, and hands
-    out the cluster's recovery keys only as PGP messages to
-    openbaoSealKeyRecipient. Every cluster also keeps a worker image.
+    No Cloud node boots before the gateway's mirror holds every image, so no
+    node waits on a kubelet image it once failed to pull. The image build may
+    now take up to an hour while the mirror fills. The node report and the
+    etcd member removal tolerate the control-plane taint, so a cluster whose
+    apps run on its worker alone reports its nodes.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated
@@ -38,8 +38,8 @@ spec:
     endpoint: https://api.mitstack.dev/operators/hcloud-hrobot-talos-cluster/hook
     operations: [subscribe, unsubscribe, upgrade, validate]
     contract: kit/v1
-    # The image build, its snapshot, the nodes' first boot and the worker's rescue install take up to 60m.
-    settleBudget: 75m
+    # The image build, its snapshot, the nodes' first boot and the worker's rescue install take up to 90m.
+    settleBudget: 105m
     verbConnections:
       validate: [hetzner, github]
       unsubscribe: [hetzner, github]

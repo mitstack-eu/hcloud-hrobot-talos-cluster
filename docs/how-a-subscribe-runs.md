@@ -10,7 +10,7 @@ and on [Params, connections and outputs](reference.md).
 
 ## Why the operator takes one stage per request
 
-mitstack gives each request two minutes, and a cluster takes up to 75 minutes
+mitstack gives each request two minutes, and a cluster takes up to 105 minutes
 to build, which is the manifest's settle budget. The operator therefore builds
 the cluster one stage per request, and mitstack sends a fresh request until the
 cluster is ready. Every Cloud resource carries the subscription id as a label,
@@ -97,8 +97,10 @@ through these stages:
    mints the cluster's keys and creates the gateway and the builder.
 2. In that same call the kit's `Installed` hook starts the worker's install.
    [The next section](#how-the-worker-is-installed) follows it.
-3. Later calls attach the gateway and the builder, power them on, snapshot the
-   builder's disk, delete the builder and create the three nodes, one per call.
+3. Later calls attach the gateway and the builder and power them on. Once the
+   builder powers itself off, after its image is built and the gateway's mirror
+   answers, they snapshot its disk, delete the builder and create the three
+   nodes, one per call.
 4. The gateway starts etcd on the first node, and inside the cluster a Job
    enrols with the platform, as the kit's README and
    [Inside the cluster](inside-the-cluster.md) describe.

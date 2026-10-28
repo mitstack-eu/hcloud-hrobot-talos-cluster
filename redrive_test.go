@@ -41,6 +41,24 @@ func TestSubscribe_OneSubscribeCarriesTheClusterToItsThreeNodesAndItsWorkerThrou
 	assert.Greater(t, subscribes, 1, "subscribes: the engine never re-drove one")
 }
 
+func TestSubscribe_ACloudNodeBootsOnlyOnceTheGatewaysMirrorIsCompleteAndTheClusterStillSettlesInItsBudget(t *testing.T) {
+	e := newEnv(t)
+	e.cloud.MirrorTakes = controlplane.BuildDeadline - time.Minute
+	p := e.engine()
+
+	final := p.settle(nil)
+
+	require.False(t, final.pending, "the last answer: %s", final.detail)
+	assert.Equal(t, contract.Present, e.observe().State, "the cluster once the last call answered settled")
+	complete, ok := e.cloud.MirrorCompleteAt()
+	require.True(t, ok, "the gateway's mirror never completed")
+	nodes := e.byRole(controlplane.RoleNode)
+	require.Len(t, nodes, len(controlplane.Locations), "nodes")
+	for _, n := range nodes {
+		assert.False(t, n.Created.Before(complete), "%s was created at %s, before the gateway's mirror completed at %s", n.Name, n.Created, complete)
+	}
+}
+
 func TestSubscribe_EachCallWaitsOnOneHetznerActionAtMostAndHoldsNoPoll(t *testing.T) {
 	e := newEnv(t)
 	p := e.engine()
