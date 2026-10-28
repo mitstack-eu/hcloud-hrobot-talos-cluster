@@ -60,10 +60,11 @@ token and the cluster's certificate authorities. It travels another way:
 4. The rescue system brings up the vSwitch VLAN with MTU 1400 and fetches the
    image with `curl --pinnedpubkey`, so it accepts only the server holding that
    TLS key.
-5. `robotworker/scripts/serve-image.py` serves one whole copy to the worker's
-   vSwitch address alone. It deletes the TLS key once loaded, and the image once
-   the worker read a whole copy and closed the connection. The install then
-   deletes the image server.
+5. talos-cluster-kit's serve program, `serve.Program` in its `serve` package,
+   serves one whole copy over TLS 1.3 to the worker's vSwitch address alone.
+   It deletes the TLS key once loaded, and the image once the worker read a
+   whole copy and closed the connection. The install then deletes the image
+   server.
 
 An attacker who answers the rescue system's SSH learns only the pin and the
 addresses. An attacker who answers on the vSwitch cannot present the pinned
@@ -89,7 +90,7 @@ subnet `10.0.1.0/24`, with the network's routes exposed to the vSwitch, which
 the trial needed for the route to the gateway. It then waits until the gateway
 holds `10.0.0.2`, since a server that joined first would take that address.
 It creates the image server in the server's location, from the image
-`docker-ce`, labelled with the role `worker-image`, and deletes it after.
+`docker-ce`, labelled with the role `robot-image-server`, and deletes it after.
 
 The block also passes `Installer.From`, the public IPv4 address the operator's
 SSH leaves from. It reads that address from the operator's environment variable
@@ -118,7 +119,8 @@ curl, python3 and zstd on the machine.
 | `TestBuildAndServe_BuildsTheMetalImageDiscardingImagerOutputAndServesItToTheWorker` | The image server builds the `metal` image and serves it decompressed |
 
 The Robot fake is block-kit's `robottest`, the rescue system is an SSH server
-in the test, and the image server is `serve-image.py` itself on `127.0.0.1`.
+in the test, and the image server is the kit's serve program itself on
+`127.0.0.1`.
 
 ## What no run has shown yet
 

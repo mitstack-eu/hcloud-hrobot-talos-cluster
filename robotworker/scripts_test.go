@@ -31,7 +31,8 @@ done`,
 	require.NoError(t, os.MkdirAll(filepath.Join(netClass, "enp7s0"), 0o755))
 	env := tools.Env("SERVE_OUT_DIR="+out, "SERVE_RESOLV_CONF="+filepath.Join(dir, "resolv.conf"), "SERVE_NET_CLASS="+netClass)
 
-	output, err := testutil.RunBash(t, buildAndServeScript, env, image.PinnedImager, config, "10.0.0.1", "10.0.1.2", "8443", "tls.crt", "tls.key", "serve-image.py")
+	output, err := testutil.RunBash(t, buildAndServeScript, env, image.PinnedImager, config, "10.0.0.1",
+		"python3", "-I", "serve.py", "10.0.1.2", "8443", "tls.crt", "tls.key", out+"/image.raw")
 
 	require.NoError(t, err, output)
 	assert.NotContains(t, output, imagerSecret)
@@ -40,7 +41,7 @@ done`,
 	assert.Contains(t, calls, "ip route replace default via 10.0.0.1")
 	assert.Contains(t, calls, "docker run --rm --privileged -v /dev:/dev -v "+config+":/in/config.yaml:ro -v "+out+":/out "+
 		image.PinnedImager+" metal --arch amd64 --embedded-config-path /in/config.yaml")
-	assert.Equal(t, "python3 -I serve-image.py 10.0.1.2 8443 tls.crt tls.key "+out+"/image.raw", calls[len(calls)-1])
+	assert.Equal(t, "python3 -I serve.py 10.0.1.2 8443 tls.crt tls.key "+out+"/image.raw", calls[len(calls)-1])
 	served, err := os.ReadFile(filepath.Join(tools.Dir, "served"))
 	require.NoError(t, err)
 	assert.Equal(t, "metal image", string(served), "the image is served decompressed")

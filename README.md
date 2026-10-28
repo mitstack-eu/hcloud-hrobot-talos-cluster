@@ -172,6 +172,7 @@ It then deletes the repo when it carries the two GitHub topics the block set on 
 ├── repository.go            creates, reads and deletes the cluster repo
 ├── observe.go               reads each resource and sets the outputs
 ├── nodereports.go           reads the cluster's node reports
+├── hosting.go               the deploy keys and recovery outputs of the cluster that hosts mitstack
 ├── teardown.go              runs the unsubscribe
 ├── robotworker/             writes a Robot server's Talos disk from its rescue system
 ├── *_test.go                the rest of the tests, listed in docs/
@@ -185,4 +186,5 @@ It then deletes the repo when it carries the two GitHub topics the block set on 
 - [Build progress and failures](docs/build-progress-and-failures.md): what a build reports, and every refusal with what you do about it.
 - [Inside the cluster](docs/inside-the-cluster.md): what runs there, the tools image and the logs.
 - [Changing the block](docs/changing-the-block.md): running the tests, and what each file holds.
+- [A cluster that hosts mitstack](docs/hosting-the-platform.md): the deploy keys and recovery outputs of mitstack's own cluster.
 - [How a Robot worker is installed](docs/robot-worker-install.md): each install part, the trial note section it follows, and how the keys reach the disk.

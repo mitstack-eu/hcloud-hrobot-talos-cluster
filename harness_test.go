@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -375,18 +376,20 @@ func (e *env) repo() string {
 
 const settleBudget = 75 * time.Minute
 
-// fakeGitHub serves the repository, topics and contents calls the block makes, from memory.
+// fakeGitHub serves the repository, topics, contents and deploy key calls the block makes, from memory.
 type fakeGitHub struct {
-	mu     sync.Mutex
-	repos  map[string][]string
-	files  map[string]string
-	server *httptest.Server
-	writes int
+	mu      sync.Mutex
+	repos   map[string][]string
+	files   map[string]string
+	keys    map[string][]deployKey
+	nextKey int64
+	server  *httptest.Server
+	writes  int
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
 	t.Helper()
-	gh := &fakeGitHub{repos: map[string][]string{}, files: map[string]string{}}
+	gh := &fakeGitHub{repos: map[string][]string{}, files: map[string]string{}, keys: map[string][]deployKey{}, nextKey: 100}
 	gh.server = httptest.NewServer(http.HandlerFunc(gh.serve))
 	t.Cleanup(gh.server.Close)
 	return gh
@@ -409,8 +412,11 @@ func (gh *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		gh.serveTopics(w, r, strings.TrimSuffix(path, "/topics"))
 	case strings.Contains(path, "/contents/"):
 		gh.serveContents(w, r, path)
+	case strings.Contains(path, "/keys"):
+		gh.serveKeys(w, r, path)
 	case r.Method == http.MethodDelete:
 		delete(gh.repos, path)
+		delete(gh.keys, path)
 		for file := range gh.files {
 			if strings.HasPrefix(file, path+"/") {
 				delete(gh.files, file)
@@ -439,21 +445,85 @@ func (gh *fakeGitHub) serveTopics(w http.ResponseWriter, r *http.Request, repo s
 	_ = json.NewEncoder(w).Encode(map[string][]string{"names": gh.repos[repo]})
 }
 
+func fileSHA(content string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(content))) }
+
+// serveContents refuses a write over an existing file that does not name its sha, as GitHub does.
 func (gh *fakeGitHub) serveContents(w http.ResponseWriter, r *http.Request, path string) {
+	content, ok := gh.files[path]
 	if r.Method == http.MethodPut {
-		var body struct{ Content string }
+		var body struct{ Content, SHA string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if ok && body.SHA != fileSHA(content) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
 		decoded, _ := base64.StdEncoding.DecodeString(body.Content)
 		gh.files[path] = string(decoded)
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
-	content, ok := gh.files[path]
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"content": base64.StdEncoding.EncodeToString([]byte(content))})
+	_ = json.NewEncoder(w).Encode(map[string]string{"content": base64.StdEncoding.EncodeToString([]byte(content)), "sha": fileSHA(content)})
+}
+
+func (gh *fakeGitHub) serveKeys(w http.ResponseWriter, r *http.Request, path string) {
+	repo, id, _ := strings.Cut(strings.TrimSuffix(strings.Split(path, "?")[0], "/"), "/keys")
+	if _, ok := gh.repos[repo]; !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		var k deployKey
+		_ = json.NewDecoder(r.Body).Decode(&k)
+		gh.nextKey++
+		k.ID = gh.nextKey
+		gh.keys[repo] = append(gh.keys[repo], k)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(k)
+	case http.MethodDelete:
+		before := len(gh.keys[repo])
+		gh.keys[repo] = slices.DeleteFunc(gh.keys[repo], func(k deployKey) bool { return "/"+fmt.Sprint(k.ID) == id })
+		if len(gh.keys[repo]) == before {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		_ = json.NewEncoder(w).Encode(append([]deployKey{}, gh.keys[repo]...))
+	}
+}
+
+// deployKeys are the deploy keys the repository holds now.
+func (gh *fakeGitHub) deployKeys(repo string) []deployKey {
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	return slices.Clone(gh.keys[repo])
+}
+
+func (gh *fakeGitHub) addDeployKey(repo string, k deployKey) {
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	gh.nextKey++
+	k.ID = gh.nextKey
+	gh.keys[repo] = append(gh.keys[repo], k)
+}
+
+// file is the content of path in the fake, and whether it holds one.
+func (gh *fakeGitHub) file(path string) (string, bool) {
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	content, ok := gh.files[path]
+	return content, ok
+}
+
+func (gh *fakeGitHub) writeFile(path, content string) {
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	gh.files[path] = content
 }
 
 func (gh *fakeGitHub) topics(repo string) []string {

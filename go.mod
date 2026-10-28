@@ -3,8 +3,9 @@ module github.com/mitstack-eu/hcloud-hrobot-talos-cluster
 go 1.26.10
 
 require (
+	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/mitstack-eu/block-kit v0.5.4
-	github.com/mitstack-eu/talos-cluster-kit v0.17.0
+	github.com/mitstack-eu/talos-cluster-kit v0.18.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/crypto v0.58.0
@@ -12,7 +13,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.2 // indirect
-	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect

@@ -70,7 +70,12 @@ const (
 type clusterParams struct {
 	appName, serverType string
 	robotServer         int64
+	// hosting is whether the cluster hosts the platform, and recipient the key its recovery files are encrypted to.
+	hosting   bool
+	recipient []byte
 }
+
+func hostsPlatform(d contract.Desired) bool { return d.Params[paramHostsPlatform] == "true" }
 
 func readParams(d contract.Desired) (clusterParams, error) {
 	p := clusterParams{appName: d.Params["appName"], serverType: cmp.Or(d.Params["serverType"], controlplane.DefaultServerType)}
@@ -81,9 +86,11 @@ func readParams(d contract.Desired) (clusterParams, error) {
 		return p, handler.Refuse("invalid-param", `params["serverType"] is %q; the cluster runs on %s`,
 			p.serverType, strings.Join(controlplane.ServerTypes, ", "))
 	}
-	if d.Params[paramHostsPlatform] == "true" {
-		return p, handler.Refuse("invalid-param",
-			`params["%s"] is true, and this release builds no cluster that boots the platform's own stores`, paramHostsPlatform)
+	if p.hosting = hostsPlatform(d); p.hosting {
+		var err error
+		if p.recipient, err = readRecipient(d.Params[paramRecipient]); err != nil {
+			return p, err
+		}
 	}
 	number, err := robotServerNumber(d)
 	p.robotServer = number
@@ -177,6 +184,10 @@ func readEnsureRequest(d contract.Desired) (ensureRequest, error) {
 func (req ensureRequest) plane(api controlplane.API) controlplane.Plane {
 	p := newPlane(api, req.subID, req.params.appName)
 	p.ServerType, p.RepoURL = req.params.serverType, req.gh.repo.url()
+	if req.params.hosting {
+		// OpenBao's members keep their data on the control-plane nodes, and neither they nor Traefik tolerate a taint.
+		p.Hosting, p.AppsOnWorkers = req.hosting(), false
+	}
 	p.Installed = func(ctx context.Context, network controlplane.Network, cluster nodeconfig.Cluster) error {
 		return startWorkerInstall(ctx, req, p, network, cluster)
 	}

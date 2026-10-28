@@ -163,7 +163,7 @@ func (j *install) startImageServer(ctx context.Context, config []byte) (imageFet
 	if err != nil {
 		return imageFetch{}, fmt.Errorf("reading the address of image server %d: %w", id, err)
 	}
-	return imageFetch{server: addr, pin: key.pin}, nil
+	return imageFetch{server: addr, pin: key.Pin}, nil
 }
 
 // cleanUp runs after every run, written or failed: it deletes the image server and the rescue key, restores the

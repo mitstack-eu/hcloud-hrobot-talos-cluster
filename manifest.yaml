@@ -22,13 +22,14 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.2.1
-  releaseClass: correctness-fix
+  version: 0.3.0
+  releaseClass: feature
   releaseNote: >-
-    A build stays inside Hetzner Robot's hourly request limits, since the
-    operator answers a repeat Robot read from its last answer for a minute.
-    When Robot still answers 403 RATE_LIMIT_EXCEEDED, subscribe waits in
-    progress and changes nothing in Robot, instead of failing the build.
+    A cluster with hostsPlatform set installs mitstack's own stores with no
+    key a person provides. The install creates a write and a read-only deploy
+    key on the cluster repository, seals them inside the cluster, and hands
+    out the cluster's recovery keys only as PGP messages to
+    openbaoSealKeyRecipient. Every cluster also keeps a worker image.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated
