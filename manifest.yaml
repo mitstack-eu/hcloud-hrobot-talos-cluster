@@ -27,9 +27,10 @@ spec:
   releaseNote: >-
     The block builds on talos-cluster-kit v0.20.0, so the ingress load
     balancer sends web traffic to the Robot worker at its vSwitch address,
-    where Traefik runs, and to no control-plane node. A cluster built from an
-    earlier release loses its control-plane ingress target on its next
-    subscribe.
+    where Traefik runs, and to no control-plane node. A cluster that does not
+    host the platform and was built from an earlier release loses its
+    control-plane ingress target on its next subscribe. A cluster that hosts
+    the platform keeps targeting its Cloud nodes, where its Traefik runs.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated
