@@ -22,9 +22,20 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.8
+  version: 0.3.9
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.9: the block builds on talos-cluster-kit v0.27.0, which lets each app
+    on a cluster that hosts the platform get a Let's Encrypt certificate. The
+    hosting set carries the ClusterIssuer `letsencrypt-production` that every
+    app's Ingress asks for, solving HTTP-01 through Traefik. Beside the API
+    server, cert-manager may now look names up, reach Let's Encrypt's ACME
+    API on 443 and fetch an app's hostname on 80, and nothing else. The
+    gateway forwards port 80 to the ingress load balancer's public address
+    alone, so cert-manager's own check of the challenge leaves the cluster,
+    and the install fails while that load balancer has no public address. A
+    cluster built on an earlier release keeps its gateway's rules, so only a
+    cluster built on 0.3.9 or later carries that forward.
     0.3.8: the block builds on talos-cluster-kit v0.26.0, which lets a
     cluster that hosts the platform serve its apps through its ingress load
     balancer. Traefik's image is named `docker.io/library/traefik`, the name a
