@@ -22,9 +22,20 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.6
+  version: 0.3.7
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.7: the block builds on talos-cluster-kit v0.25.0, which carries two
+    fixes. Talos now applies the cluster's manifests in a set order. Cilium
+    and Istio's dataplane apply first, then the node report and the cluster
+    tokens, then the components, and last the objects cert-manager's and
+    trust-manager's webhooks validate. A cluster that hosts the platform no
+    longer stalls after enrolment on a cert-manager Issuer applied before
+    ztunnel, and a component that fails to apply leaves the node report
+    running. The API server also reaches cert-manager's and External
+    Secrets' webhooks on a Robot worker, since the hosting flows admit the
+    control-plane nodes by their label. No other node, host or the world
+    reaches those ports.
     0.3.6: the block builds on talos-cluster-kit v0.23.0. The gateway copies
     its image mirror with a skopeo image pinned by digest, which copies
     trust-manager's OCI image index with its digest kept, so a cluster that
