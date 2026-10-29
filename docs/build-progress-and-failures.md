@@ -35,6 +35,12 @@ refusal carries the metrics summary, when the disk last moved and when the CPU
 was last above 10%. A metrics read that fails never fails validate or the
 refusal.
 
+A gateway whose copy of an image into its mirror fails powers itself off. The
+next subscribe reads the gateway off, though Hetzner started it, while the
+builder has not finished. It deletes the builder and refuses with
+`gateway-mirror-failed`, naming the gateway's image mirror, minutes after the
+copy failed and well inside the builder's 60 minutes.
+
 A worker install that ends in an error marks the network `failed`, and the
 operator's log says why. The next subscribe refuses with `worker-install-failed`.
 
@@ -110,14 +116,16 @@ otherwise. The class is the name that follows `refused:` in the answer.
 | `ambiguous-vswitch` | More than one vSwitch carries the subscription's name | Cancel the extra ones in Robot and retry |
 | `repository-not-marked` | The cluster repository exists without the subscription's mark, two GitHub topics | Add both topics if it is the cluster's repository, or move it away, and retry |
 | `image-build-failed` | The builder did not power itself off within 60 minutes, so the image was not built or the gateway's mirror never completed | Unsubscribe and subscribe again |
+| `gateway-mirror-failed` | The gateway powered itself off before the builder finished, as it does when a copy into its image mirror fails | Unsubscribe and subscribe again |
 | `ambiguous-cluster` | Two Cloud servers of one role in one location, or two load balancers of one role, carry the subscription's labels | Delete the extra ones from the Hetzner project and retry |
 | `server-unavailable` | Hetzner cannot place a server, or `fsn1` can order neither gateway type | Subscribe again later |
 | `gateway-lost` | The nodes run but no gateway carries the subscription's labels | Unsubscribe and subscribe again |
 | `robot-left-in-place` | At unsubscribe, the Robot login was unusable, so the Cloud resources are deleted but the server and its vSwitch stay | Fix the login in the connection and unsubscribe again |
 | `repository-left-in-place` | At unsubscribe, the GitHub connection was unusable, so the repository stays | Fix the connection and unsubscribe again |
 
-The kit's `controlplane` package raises `image-build-failed`, `ambiguous-cluster`,
-`server-unavailable` and `gateway-lost`, and the block passes each through with
+The kit's `controlplane` package raises `image-build-failed`,
+`gateway-mirror-failed`, `ambiguous-cluster`, `server-unavailable` and
+`gateway-lost`, and the block passes each through with
 its class. An install whose create fails deletes the gateway and the builder, so
 the next call installs anew. The cluster's keys exist only in the call that
 mints them, the builder's user data and the snapshot, so a cluster that loses
