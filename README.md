@@ -164,7 +164,7 @@ It then deletes the repo when it carries the two GitHub topics the block set on 
 ├── go.mod, go.sum           the Go module and its checksums
 ├── secrets_leak_test.go     proves no token reaches an answer or a log
 ├── teardown_test.go         proves unsubscribe deletes everything
-├── .github/workflows/ci.yml tests the block and publishes its image
+├── .github/workflows/ci.yml tests and scans the block, and publishes its image
 │   # This block adds these
 ├── LICENSE                  Business Source License 1.1
 ├── docs/                    the detail behind this page

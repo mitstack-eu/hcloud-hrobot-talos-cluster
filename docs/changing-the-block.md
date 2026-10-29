@@ -55,7 +55,7 @@ them, and adds its own files after.
 | `go.sum` | The checksums of those modules |
 | `secrets_leak_test.go` | Proves that no token reaches an answer or the logs |
 | `teardown_test.go` | Proves that unsubscribe deletes every resource, the snapshot included |
-| `.github/` | `workflows/ci.yml`, which this block has in place of the scaffold's `block-verify.yml`. It runs block-kit's publish workflow, which tests the block and publishes its image on a push to `main`, and runs gitleaks and shellcheck |
+| `.github/` | `workflows/ci.yml`, which this block has in place of the scaffold's `block-verify.yml`. It calls block-kit's publish workflow, whose `block / conformance`, `block / secrets` and `block / scripts` checks `main` requires, and which publishes the image on a push to `main` |
 
 The scaffold's `resource_test.go`, `verbsemantics_test.go` and
 `types/snapshot.json` are not in this repository. Its copy of the platform's
@@ -81,5 +81,6 @@ type snapshot sits at `testdata/type-snapshot.json` instead.
 | `subscribe_test.go` | Proves what a subscribe builds, every refusal and the outputs |
 | `redrive_test.go` | Proves that one subscribe reaches the cluster through mitstack's repeated requests |
 | `manifest_test.go` | Proves the manifest's type, resources, description and settle budget, and that every declared resource has an observer |
+| `ci_kit_test.go` | Proves that `go.mod` and `ci.yml` name one block-kit release, one that runs the shared scans |
 | `declared_resources_test.go` | Runs block-kit's block guards |
 | `testdata/` | `type-snapshot.json`, the platform's resource types the tests read |

@@ -77,8 +77,8 @@ github.com/mdlayher/netlink v1.11.2 h1:HKh2jqe+omdSWcQ88nrT7INE61B0NXfiSPFdgL4Yb
 github.com/mdlayher/netlink v1.11.2/go.mod h1:uT2Yc/QLaZubzDpZIBi9d4GoeLwtp3x1AMeqSRrK2sA=
 github.com/mdlayher/socket v0.6.1 h1:M7uj2NtuujUY4mYr1C57NmfNiRHbkKpnBxO856lsc3A=
 github.com/mdlayher/socket v0.6.1/go.mod h1:+/SGtqc9V+5dAuRgQsU0fGBI+oRDiW7O2Obx10OIWfg=
-github.com/mitstack-eu/block-kit v0.5.4 h1:LXRVGY/UQe5B3nvcMt1fipsGCMfUENA5rBIDK5/VBck=
-github.com/mitstack-eu/block-kit v0.5.4/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
+github.com/mitstack-eu/block-kit v0.5.5 h1:TVyiwzlHhdCXozoSsTVqTw+FSOa2BunwNlAIivAmirM=
+github.com/mitstack-eu/block-kit v0.5.5/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
 github.com/mitstack-eu/talos-cluster-kit v0.21.0 h1:xda5A3tWoK8/8P8HhdokYlZ7dT5gfqowaRK3fvRgyHw=
 github.com/mitstack-eu/talos-cluster-kit v0.21.0/go.mod h1:WZ3ko/+yKjGvk5mgmyikcDG1X1/ftx81bNAX+dHPLmg=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
