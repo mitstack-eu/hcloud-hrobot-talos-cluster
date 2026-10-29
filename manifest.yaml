@@ -22,15 +22,17 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.3
+  version: 0.3.4
   releaseClass: correctness-fix
   releaseNote: >-
-    The block builds on talos-cluster-kit v0.20.0, so the ingress load
-    balancer sends web traffic to the Robot worker at its vSwitch address,
-    where Traefik runs, and to no control-plane node. A cluster that does not
-    host the platform and was built from an earlier release loses its
-    control-plane ingress target on its next subscribe. A cluster that hosts
-    the platform keeps targeting its Cloud nodes, where its Traefik runs.
+    The block builds on talos-cluster-kit v0.21.0, whose OpenBao members
+    tolerate the control-plane taint. A cluster that hosts the platform now
+    keeps that taint like every other cluster of the block. OpenBao's three
+    members stay on the Cloud nodes, Traefik, Argo CD and every app run on
+    the Robot worker, and the ingress load balancer targets the worker alone.
+    A hosting cluster built from an earlier release moves its ingress target
+    to the worker on its next subscribe. Whether its Cloud nodes gain the
+    taint then is unproven, so rebuild such a cluster.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated

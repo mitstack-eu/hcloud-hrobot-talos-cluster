@@ -109,9 +109,22 @@ gh api repos/acme/shop-cluster/contents/openbao-seal-key.asc --jq .content \
 
 ## Where the stores run
 
-A hosting cluster runs no app on its worker. OpenBao's members keep their data
-on volumes pinned to the Cloud nodes, and Traefik answers only on a node that
-runs it. The block therefore sets the kit's `AppsOnWorkers` to `false` for a
-hosting cluster, in `plane` in `resource.go`, and its ingress load balancer
-targets the Cloud nodes. `hetznerReader` in `observe.go` judges the cluster
-the same way.
+A hosting cluster keeps its stores on the Cloud nodes and its web traffic on
+the Robot worker, so the nodes that hold etcd, the Kubernetes API and
+OpenBao's data take no internet traffic.
+
+The block keeps the kit's `AppsOnWorkers` on for a hosting cluster, as for any
+other, so the Cloud nodes keep Talos's `NoSchedule` taint. `plane` in
+`resource.go` adds only the hosting set. OpenBao's three members tolerate the
+taint, and the kit pins each member's volume to one Cloud node, so each node
+in `fsn1`, `nbg1` and `hel1` runs one member. Traefik, cert-manager,
+trust-manager, External Secrets, Sealed Secrets, Argo CD and mitstack's own
+workloads tolerate no taint and run on the worker.
+
+The ingress load balancer therefore targets the worker at `10.0.1.2` and no
+Cloud node, and the API load balancer targets the Cloud nodes.
+`hetznerReader` in `observe.go` judges a hosting cluster's ingress by that
+worker target, as for any other cluster.
+
+Each OpenBao member mounts the certificate cert-manager issues, so the members
+start only once the worker has joined and runs cert-manager.
