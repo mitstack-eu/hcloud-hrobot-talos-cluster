@@ -123,6 +123,10 @@ func TestSubscribe_HostsThePlatformWithAWriteAndAReadOnlyDeployKeyTheInstallCrea
 	installs := e.installed()
 	require.Len(t, installs, 1, "installs")
 	assert.False(t, installs[0].installer.Cluster.AppsOnWorkers, "OpenBao's members and Traefik run on the control-plane nodes")
+	ingress := e.cloud.OnlyLoadBalancer(t, testPlane().RoleSelector(controlplane.RoleIngress))
+	assert.Equal(t, []string{testPlane().RoleSelector(controlplane.RoleNode)}, ingress.TargetSelectors,
+		"the ingress load balancer reaches Traefik on the control-plane nodes")
+	assert.Empty(t, ingress.TargetIPs, "the ingress load balancer's address targets")
 	for _, name := range []string{sealKeyFile, sealedSecretsKeyFile, sealedSecretsCert} {
 		_, ok := e.repoFile(name)
 		assert.True(t, ok, "the install committed no %s", name)
