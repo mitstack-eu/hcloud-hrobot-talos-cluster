@@ -39,8 +39,11 @@ inside the configuration itself.
 
 The block sets `AppsOnWorkers` on the plane, so the control-plane nodes keep
 Talos's `NoSchedule` taint and app pods run only on the worker. Cilium,
-ztunnel, the CNI agent and the log collector still run on every node. Every
-other pod, Argo CD among them, waits Pending until the worker joins.
+ztunnel, the CNI agent and the log collector still run on every node. On a
+cluster that hosts the platform, OpenBao's members run on the control-plane
+nodes too, as [Where the stores run](hosting-the-platform.md#where-the-stores-run)
+explains. Every other pod, Argo CD among them, waits Pending until the worker
+joins.
 
 Every Kyverno policy exempts `mitstack-node`, so the block's own pods need no
 app label and keep their route to the platform. Every image these components

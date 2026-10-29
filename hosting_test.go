@@ -122,11 +122,13 @@ func TestSubscribe_HostsThePlatformWithAWriteAndAReadOnlyDeployKeyTheInstallCrea
 	}, keys, "each deploy key's public half on GitHub, beside the private half the cluster opens")
 	installs := e.installed()
 	require.Len(t, installs, 1, "installs")
-	assert.False(t, installs[0].installer.Cluster.AppsOnWorkers, "OpenBao's members and Traefik run on the control-plane nodes")
+	assert.True(t, installs[0].installer.Cluster.AppsOnWorkers, "Traefik and the apps run on the worker, and only OpenBao's members on the control plane")
+	nodes := []string{testPlane().RoleSelector(controlplane.RoleNode)}
 	ingress := e.cloud.OnlyLoadBalancer(t, testPlane().RoleSelector(controlplane.RoleIngress))
-	assert.Equal(t, []string{testPlane().RoleSelector(controlplane.RoleNode)}, ingress.TargetSelectors,
-		"the ingress load balancer reaches Traefik on the control-plane nodes")
-	assert.Empty(t, ingress.TargetIPs, "the ingress load balancer's address targets")
+	assert.Equal(t, []string{"10.0.1.2"}, ingress.TargetIPs, "the ingress load balancer's address targets")
+	assert.Empty(t, ingress.TargetSelectors, "the ingress load balancer's label targets")
+	assert.Equal(t, nodes, e.cloud.OnlyLoadBalancer(t, testPlane().RoleSelector(controlplane.RoleAPI)).TargetSelectors,
+		"the API load balancer's label targets")
 	for _, name := range []string{sealKeyFile, sealedSecretsKeyFile, sealedSecretsCert} {
 		_, ok := e.repoFile(name)
 		assert.True(t, ok, "the install committed no %s", name)
