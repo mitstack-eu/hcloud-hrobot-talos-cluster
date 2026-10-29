@@ -22,9 +22,16 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.5
+  version: 0.3.6
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.6: the block builds on talos-cluster-kit v0.23.0. The gateway copies
+    its image mirror with a skopeo image pinned by digest, which copies
+    trust-manager's OCI image index with its digest kept, so a cluster that
+    hosts the platform completes its mirror. A copy that fails powers the
+    gateway off, and the subscribe then fails with the class
+    gateway-mirror-failed, naming the gateway's image mirror, instead of
+    waiting out the builder's 60-minute deadline.
     0.3.5: the operator builds on block-kit v0.5.5, and nothing it answers
     changes. The block's CI scans its whole history for secrets with gitleaks
     and its shell scripts with shellcheck through block-kit's shared
