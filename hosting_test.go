@@ -169,7 +169,7 @@ func TestObserve_AHostingClusterOutputsItsKeysOnlyAsPGPMessagesToTheRecipient(t 
 	assert.Contains(t, sealedSecretsKey[0], "PRIVATE KEY", "sealedSecretsKey opens to the Sealed Secrets key")
 	var served string
 	for _, doc := range testutil.Kind(servedHosting(t, e), "KubeInlineManifestConfig") {
-		if doc["name"] == "mitstack-openbao-seal-key" {
+		if testutil.ManifestName(doc["name"].(string)) == "mitstack-openbao-seal-key" {
 			served = doc["manifest"].(string)
 		}
 	}
