@@ -50,6 +50,16 @@ control-plane nodes keep Talos's `NoSchedule` taint. Cilium, ztunnel, the CNI
 agent and the log collector still run on every node. Every other pod, Argo CD
 among them, waits Pending until the worker joins.
 
+Web traffic from the internet reaches the worker alone. Traefik runs where the
+apps run, so the ingress load balancer targets the worker at its vSwitch
+address `10.0.1.2` and no control-plane node, and the nodes that hold etcd and
+the Kubernetes API take no internet traffic. The block names that address to
+the plane in `newPlane` in `identity.go`. The plane adds the target once the
+worker's install has coupled the vSwitch subnet, since Hetzner accepts a
+private target only inside a vSwitch subnet of the network. The load balancer
+reaches the worker from its private address `10.0.0.4`, which the Robot
+firewall's rule for the cluster network admits.
+
 | Resource | What it does | Where |
 |---|---|---|
 | Network `10.0.0.0/16`, firewall, gateway at `10.0.0.2`, two load balancers, builder, snapshot and three nodes | The Cloud control plane, labelled with the subscription | The kit's `controlplane` package, driven from `Ensure` in `resource.go` |

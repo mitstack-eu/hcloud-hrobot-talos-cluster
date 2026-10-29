@@ -13,15 +13,16 @@ const blockID = "hcloud-hrobot-talos-cluster"
 
 func newPlane(api controlplane.API, subID, appName string) controlplane.Plane {
 	return controlplane.Plane{
-		API:           api,
-		Block:         blockID,
-		Subscription:  subID,
-		AppName:       appName,
-		ServerType:    controlplane.DefaultServerType,
-		Boundary:      userDataBoundary,
-		PlatformURL:   platformURL,
-		Now:           clock,
-		AppsOnWorkers: true,
+		API:             api,
+		Block:           blockID,
+		Subscription:    subID,
+		AppName:         appName,
+		ServerType:      controlplane.DefaultServerType,
+		Boundary:        userDataBoundary,
+		PlatformURL:     platformURL,
+		Now:             clock,
+		AppsOnWorkers:   true,
+		WorkerAddresses: []string{workerAddress.Addr().String()},
 	}
 }
 

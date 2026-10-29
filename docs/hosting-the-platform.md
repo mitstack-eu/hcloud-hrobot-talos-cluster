@@ -112,4 +112,6 @@ gh api repos/acme/shop-cluster/contents/openbao-seal-key.asc --jq .content \
 A hosting cluster runs no app on its worker. OpenBao's members keep their data
 on volumes pinned to the Cloud nodes, and Traefik answers only on a node that
 runs it. The block therefore sets the kit's `AppsOnWorkers` to `false` for a
-hosting cluster, in `plane` in `resource.go`.
+hosting cluster, in `plane` in `resource.go`, and its ingress load balancer
+targets the Cloud nodes. `hetznerReader` in `observe.go` judges the cluster
+the same way.
