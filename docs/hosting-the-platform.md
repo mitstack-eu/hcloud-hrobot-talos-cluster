@@ -109,22 +109,25 @@ gh api repos/acme/shop-cluster/contents/openbao-seal-key.asc --jq .content \
 
 ## Where the stores run
 
-A hosting cluster keeps its stores on the Cloud nodes and its web traffic on
-the Robot worker, so the nodes that hold etcd, the Kubernetes API and
-OpenBao's data take no internet traffic.
+A hosting cluster keeps OpenBao's data on the Cloud nodes and runs everything
+else, Sealed Secrets and the web traffic included, on the Robot worker. The
+nodes that hold etcd, the Kubernetes API and OpenBao's data therefore take no
+internet traffic.
 
-The block keeps the kit's `AppsOnWorkers` on for a hosting cluster, as for any
-other, so the Cloud nodes keep Talos's `NoSchedule` taint. `plane` in
-`resource.go` adds only the hosting set. OpenBao's three members tolerate the
-taint, and the kit pins each member's volume to one Cloud node, so each node
-in `fsn1`, `nbg1` and `hel1` runs one member. Traefik, cert-manager,
-trust-manager, External Secrets, Sealed Secrets, Argo CD and mitstack's own
-workloads tolerate no taint and run on the worker.
+The kit's `AppsOnWorkers` setting decides where pods run. On, the Cloud nodes
+keep Talos's `NoSchedule` taint, a mark that turns away every pod that does
+not tolerate it. The block keeps the setting on for a hosting cluster, as for
+any other, and `plane` in `resource.go` adds only the hosting set. OpenBao's
+three members tolerate the taint, and the kit pins each member's volume to one
+Cloud node, so each node in `fsn1`, `nbg1` and `hel1` runs one member.
+Traefik, cert-manager, trust-manager, External Secrets, Sealed Secrets, Argo
+CD and mitstack's own workloads tolerate no taint and run on the worker.
 
 The ingress load balancer therefore targets the worker at `10.0.1.2` and no
 Cloud node, and the API load balancer targets the Cloud nodes.
 `hetznerReader` in `observe.go` judges a hosting cluster's ingress by that
 worker target, as for any other cluster.
 
-Each OpenBao member mounts the certificate cert-manager issues, so the members
-start only once the worker has joined and runs cert-manager.
+Each OpenBao member mounts the TLS certificate that cert-manager issues, and
+cert-manager runs on the worker. The members therefore start only once the
+worker has joined.

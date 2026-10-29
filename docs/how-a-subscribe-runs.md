@@ -47,8 +47,10 @@ to pick, because every cluster spans all three.
 The worker is the dedicated server that `robotServerNumber` names. It runs the
 app's pods, because the block sets `AppsOnWorkers` on the plane and the
 control-plane nodes keep Talos's `NoSchedule` taint. Cilium, ztunnel, the CNI
-agent and the log collector still run on every node. Every other pod, Argo CD
-among them, waits Pending until the worker joins.
+agent and the log collector still run on every node. On a cluster that hosts
+the platform, OpenBao's members run on the control-plane nodes too, as
+[Where the stores run](hosting-the-platform.md#where-the-stores-run) explains.
+Every other pod, Argo CD among them, waits Pending until the worker joins.
 
 Web traffic from the internet reaches the worker alone. Traefik runs where the
 apps run, so the ingress load balancer targets the worker at its vSwitch
