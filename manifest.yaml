@@ -22,9 +22,16 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.7
+  version: 0.3.8
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.8: the block builds on talos-cluster-kit v0.26.0, which lets a
+    cluster that hosts the platform serve its apps through its ingress load
+    balancer. Traefik's image is named `docker.io/library/traefik`, the name a
+    node asks the gateway's mirror for, so Traefik starts on the worker.
+    Traefik's two entry points read the load balancer's PROXY protocol header
+    from the cluster network, 10.0.0.0/16, and from no other address. The kit
+    also refuses any Docker Hub image named without its namespace.
     0.3.7: the block builds on talos-cluster-kit v0.25.0, which carries two
     fixes. Talos now applies the cluster's manifests in a set order. Cilium
     and Istio's dataplane apply first, then the node report and the cluster
