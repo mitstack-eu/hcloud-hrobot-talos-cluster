@@ -86,6 +86,20 @@ func TestSubscribe_TheImageServerWaitsForTheGatewayToHoldItsAddress(t *testing.T
 	assert.NotEqual(t, controlplane.GatewayAddress, installs[0].imageServer, "the image server's address")
 }
 
+func TestSubscribe_TheIngressLoadBalancerTargetsTheRobotWorkerAndNoControlPlaneNode(t *testing.T) {
+	e := newEnv(t)
+
+	obs := e.subscribe()
+
+	require.Equal(t, contract.Present, obs.State, "detail: %s", obs.StatusDetail)
+	nodes := []string{testPlane().RoleSelector(controlplane.RoleNode)}
+	ingress := e.cloud.OnlyLoadBalancer(t, testPlane().RoleSelector(controlplane.RoleIngress))
+	assert.Equal(t, []string{"10.0.1.2"}, ingress.TargetIPs, "the ingress load balancer's address targets")
+	assert.Empty(t, ingress.TargetSelectors, "the ingress load balancer's label targets")
+	assert.Equal(t, nodes, e.cloud.OnlyLoadBalancer(t, testPlane().RoleSelector(controlplane.RoleAPI)).TargetSelectors,
+		"the API load balancer's label targets")
+}
+
 func TestSubscribe_RefusesBeforeAnyChange(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -302,6 +316,7 @@ func TestSubscribe_IsUnknownUntilTheNewestNodeReportReadsEveryNodeAndTheWorkerRe
 	e.cloud.InstantBuild = true
 	require.NoError(t, e.converge())
 	e.runJobs()
+	require.NoError(t, e.converge())
 	require.Len(t, e.byRole(controlplane.RoleNode), 3, "nodes")
 	e.reports.report(e.now.Add(-time.Minute), everyNode()...)
 	notReady := everyNode()

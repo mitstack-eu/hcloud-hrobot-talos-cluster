@@ -22,14 +22,15 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.2
+  version: 0.3.3
   releaseClass: correctness-fix
   releaseNote: >-
-    The block builds on talos-cluster-kit v0.19.1, whose node report gives
-    each node's allocatable CPU, memory and pods, so an app's slice on the
-    cluster is sized against its nodes instead of refused for want of a node
-    report. A cluster built from an earlier release reports allocatable only
-    once it is subscribed again.
+    The block builds on talos-cluster-kit v0.20.0, so the ingress load
+    balancer sends web traffic to the Robot worker at its vSwitch address,
+    where Traefik runs, and to no control-plane node. A cluster that does not
+    host the platform and was built from an earlier release loses its
+    control-plane ingress target on its next subscribe. A cluster that hosts
+    the platform keeps targeting its Cloud nodes, where its Traefik runs.
   description: >
     Runs a Talos Kubernetes cluster with its control plane on three Hetzner
     Cloud nodes in fsn1, nbg1 and hel1 and its worker on a Hetzner dedicated

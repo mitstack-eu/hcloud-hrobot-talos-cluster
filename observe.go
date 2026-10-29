@@ -211,7 +211,10 @@ func hetznerReader(d contract.Desired) (controlplane.Plane, contract.Observation
 	if !controlplane.ValidLabelValue(d.SubscriptionID) {
 		return controlplane.Plane{}, unknown("the subscription id is not a valid Hetzner label value, so the cluster's resources cannot be found by it"), false
 	}
-	return newPlane(newCloudAPI(token), d.SubscriptionID, d.Params["appName"]), contract.Observation{}, true
+	p := newPlane(newCloudAPI(token), d.SubscriptionID, d.Params["appName"])
+	// A hosting cluster's Traefik runs on its control-plane nodes, so its ingress is judged as Ensure builds it.
+	p.AppsOnWorkers = !hostsPlatform(d)
+	return p, contract.Observation{}, true
 }
 
 // Observe reads the whole cluster: present once the control plane stands as the block makes it, the worker is written
