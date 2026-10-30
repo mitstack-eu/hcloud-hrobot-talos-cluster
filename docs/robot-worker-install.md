@@ -94,7 +94,9 @@ subnet `10.0.1.0/24`, with the network's routes exposed to the vSwitch, which
 the trial needed for the route to the gateway. It then waits until the gateway
 holds `10.0.0.2`, since a server that joined first would take that address.
 It creates the image server in the server's location, from the image
-`docker-ce`, labelled with the role `robot-image-server`, and deletes it after.
+`docker-ce`, which carries docker, zstd and python3, labelled with the role
+`robot-image-server`. `robot.Installer` deletes it after, on success and on
+failure.
 
 The block also passes `Installer.From`, the public IPv4 address the operator's
 SSH leaves from. It reads that address from the operator's environment variable
