@@ -1,0 +1,488 @@
+== image server user data ==
+#cloud-config
+write_files:
+    - path: /root/mitstack-serve/tls.crt
+      permissions: "0600"
+      content: |
+        <certificate>
+    - path: /root/mitstack-serve/tls.key
+      permissions: "0600"
+      content: |
+        <private key>
+    - path: /usr/local/bin/mitstack-serve
+      permissions: "0755"
+      content: |
+        """Serves one file once, over TLS 1.3, to one client address alone.
+
+        Usage: serve.py <client address> <port> <TLS certificate> <TLS key> <file>
+
+        It exists because the file holds keys of a cluster: the TLS key is deleted once
+        loaded, and the file once the client read one whole copy at /<file name> and
+        closed the connection.
+        """
+
+        import os
+        import socket
+        import ssl
+        import sys
+
+        MAX_REQUEST = 8192
+        TIMEOUT = 120
+
+
+        def serve_one(tls, path, served, size):
+            request = b""
+            while b"\r\n\r\n" not in request:
+                chunk = tls.recv(1024)
+                if not chunk or len(request) > MAX_REQUEST:
+                    return False
+                request += chunk
+            head = request.startswith(b"HEAD " + path + b" ")
+            if not head and not request.startswith(b"GET " + path + b" "):
+                tls.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                return False
+            tls.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                        b"Content-Length: %d\r\nConnection: close\r\n\r\n" % size)
+            if head:
+                return False
+            with open(served, "rb") as f:
+                while chunk := f.read(1 << 20):
+                    tls.sendall(chunk)
+            return reader_closed(tls)
+
+
+        def reader_closed(tls):
+            """Counts a fetch served only once the client closes after the last byte, since sendall only fills a buffer."""
+            try:
+                return tls.recv(1) == b""
+            except (ssl.SSLZeroReturnError, ssl.SSLEOFError):
+                return True
+
+
+        def main():
+            client, port, cert, key, served = sys.argv[1:6]
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_3
+            context.load_cert_chain(cert, key)
+            os.remove(key)
+            path = b"/" + os.path.basename(served).encode()
+            size = os.path.getsize(served)
+            with socket.create_server(("", int(port))) as listener:
+                while True:
+                    conn, (peer, *_) = listener.accept()
+                    with conn:
+                        if peer != client:
+                            continue
+                        conn.settimeout(TIMEOUT)
+                        try:
+                            with context.wrap_socket(conn, server_side=True) as tls:
+                                if serve_one(tls, path, served, size):
+                                    break
+                        except OSError as err:
+                            print(f"serve: a fetch from {peer} ended early: {err}", file=sys.stderr)
+            os.remove(served)
+            print(f"serve: served {served} once to {client}")
+
+
+        if __name__ == "__main__":
+            main()
+    - path: /root/mitstack-serve/config.yaml
+      permissions: "0600"
+      content: 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
+      encoding: gz+b64
+    - path: /usr/local/bin/mitstack-build-and-serve
+      permissions: "0755"
+      content: |
+        #!/usr/bin/env bash
+        # Builds a Robot worker's Talos metal image on the image server with imager,
+        # decompresses it to image.raw, then runs the serve command it is given.
+        # Usage: build-and-serve.sh <imager image by digest> <machine configuration> <network router> <serve command>...
+        #   SERVE_OUT_DIR, SERVE_PULL_ATTEMPTS, SERVE_RESOLV_CONF, SERVE_NET_CLASS and
+        #   SERVE_ADDRESS_WAIT default to /var/lib/mitstack-image, 30,
+        #   /etc/resolv.conf, /sys/class/net and 120 seconds.
+        # It exists because the image embeds every key of the cluster, so it is built
+        # inside the cluster's own Hetzner project, imager's output, which prints that
+        # configuration, is discarded, and only the worker may fetch it.
+        set -euo pipefail
+
+        readonly out=${SERVE_OUT_DIR:-/var/lib/mitstack-image}
+        readonly attempts=${SERVE_PULL_ATTEMPTS:-30}
+        readonly resolv_conf=${SERVE_RESOLV_CONF:-/etc/resolv.conf}
+        readonly net_class=${SERVE_NET_CLASS:-/sys/class/net}
+        readonly address_wait=${SERVE_ADDRESS_WAIT:-120}
+        readonly resolvers=("185.12.64.1" "185.12.64.2")
+
+        fail() {
+          echo "build-and-serve: $*" >&2
+          exit 1
+        }
+
+        # route_through_gateway waits for the private interface's DHCP lease, then sends the server's traffic to the network's router.
+        route_through_gateway() {
+          local router=$1 links=("$net_class"/en*) waited
+          if [ "${#links[@]}" -ne 1 ] || [ ! -e "${links[0]}" ]; then
+            fail "found no single ethernet interface in $net_class"
+          fi
+          for ((waited = 0; waited < address_wait; waited++)); do
+            ip -4 -o route get "$router" 2> /dev/null | grep -q " dev ${links[0]##*/} " && break
+            sleep 1
+          done
+          [ "$waited" -lt "$address_wait" ] || fail "the private interface has no route to $router after $address_wait seconds"
+          ip route replace default via "$router"
+          rm -f "$resolv_conf"
+          printf 'nameserver %s\n' "${resolvers[@]}" > "$resolv_conf"
+        }
+
+        pull_imager() {
+          local attempt
+          for ((attempt = 1; attempt <= attempts; attempt++)); do
+            docker pull --quiet "$1" > /dev/null && return 0
+            sleep 10
+          done
+          fail "could not pull $1 after $attempts attempts"
+        }
+
+        # build runs imager with the kit's arguments for the metal profile and discards its output, since it prints every key.
+        build() {
+          local imager=$1 config=$2
+          mkdir -p "$out"
+          if ! docker run --rm --privileged -v /dev:/dev -v "$config:/in/config.yaml:ro" -v "$out:/out" \
+            "$imager" metal --arch amd64 --embedded-config-path /in/config.yaml > /dev/null 2>&1; then
+            rm -f "$config"
+            fail "imager failed; its output is discarded because it holds every cluster key"
+          fi
+          rm -f "$config"
+          [ -f "$out/metal-amd64.raw.zst" ] || fail "imager left no metal-amd64.raw.zst in $out"
+          zstd -d --rm --quiet "$out/metal-amd64.raw.zst" -o "$out/image.raw"
+        }
+
+        main() {
+          [ "$#" -ge 4 ] || fail "usage: build-and-serve.sh <imager> <configuration> <router> <serve command>..."
+          route_through_gateway "$3"
+          pull_imager "$1"
+          build "$1" "$2"
+          exec "${@:4}"
+        }
+
+        main "$@"
+runcmd:
+    - - /usr/local/bin/mitstack-build-and-serve
+      - ghcr.io/siderolabs/imager:v1.14.4@sha256:91d453a7cf57d499fe7fe7923e1e381b6e1535136367246d190e38486c11651d
+      - /root/mitstack-serve/config.yaml
+      - 10.0.0.1
+      - python3
+      - -I
+      - /usr/local/bin/mitstack-serve
+      - 10.0.1.2
+      - "<port>"
+      - /root/mitstack-serve/tls.crt
+      - /root/mitstack-serve/tls.key
+      - /var/lib/mitstack-image/image.raw
+
+== rescue session 1 command ==
+bash -s -- read
+== rescue session 1 stdin ==
+#!/usr/bin/env bash
+# Runs in Hetzner's rescue system on a Robot worker. "read" prints each disk
+# with its serial, the MAC of the card the default route leaves by, and
+# whether the firmware booted by UEFI. "write" brings up the vSwitch VLAN,
+# waits until the install's image server answers over it, clears every disk's
+# arrays and signatures, and streams the image onto the disk with the given
+# serial.
+# Usage: rescue.sh read
+#        rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>
+#   RESCUE_SYS, RESCUE_DEV, RESCUE_FETCH_ATTEMPTS and RESCUE_FETCH_INTERVAL
+#   default to /sys, /dev, 90 and 10 seconds.
+# It exists because Robot names no host key for the rescue system, so the
+# session that runs this carries no secret: the image, which holds the
+# cluster's keys, reaches the disk only over the vSwitch, from a server whose
+# TLS key the rescue checks against the pin.
+set -euo pipefail
+
+readonly sys=${RESCUE_SYS:-/sys}
+readonly dev=${RESCUE_DEV:-/dev}
+readonly attempts=${RESCUE_FETCH_ATTEMPTS:-90}
+readonly interval=${RESCUE_FETCH_INTERVAL:-10}
+readonly vswitch_link=vsw0
+readonly vswitch_mtu=1400
+# curl's exit status when the server's key is not the pinned one.
+readonly pin_refused=90
+
+fail() {
+  echo "rescue: $*" >&2
+  exit 1
+}
+
+# disks prints the kernel name of each NVMe and SATA disk.
+disks() {
+  local d
+  for d in "$sys"/block/nvme*n* "$sys"/block/sd*; do
+    [ -e "$d" ] || continue
+    echo "${d##*/}"
+  done
+}
+
+serial_of() {
+  local d=$sys/block/$1
+  tr -d ' \n' < "$d/device/serial" 2> /dev/null || tr -d ' \n' < "$d/serial" 2> /dev/null || true
+}
+
+public_link() {
+  local link
+  link=$(ip -o route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')
+  [ -n "$link" ] || fail "found no default route, so no public card"
+  echo "$link"
+}
+
+read_hardware() {
+  local d link mac size
+  if [ -d "$sys/firmware/efi" ]; then echo "efi yes"; else echo "efi no"; fi
+  link=$(public_link)
+  mac=$(cat "$sys/class/net/$link/address")
+  echo "mac $mac"
+  for d in $(disks); do
+    size=$(cat "$sys/block/$d/size")
+    echo "disk $d $(serial_of "$d") $((size * 512))"
+  done
+}
+
+# clear_disks stops every array and volume group and wipes every signature, as the trial did before its write.
+clear_disks() {
+  local d part md vg
+  for vg in $(vgs --noheadings -o vg_name 2> /dev/null || true); do
+    vgchange -an "$vg"
+  done
+  for md in "$dev"/md[0-9]*; do
+    [ -e "$md" ] && mdadm --stop "$md"
+  done
+  for d in $(disks); do
+    for part in "$sys/block/$d/$d"*; do
+      [ -e "$part" ] || continue
+      mdadm --zero-superblock "$dev/${part##*/}" 2> /dev/null || true
+      wipefs -a "$dev/${part##*/}"
+    done
+    wipefs -a "$dev/$d"
+    sgdisk --zap-all "$dev/$d"
+  done
+}
+
+disk_with_serial() {
+  local d
+  for d in $(disks); do
+    if [ "$(serial_of "$d")" = "$1" ]; then
+      echo "$dev/$d"
+      return
+    fi
+  done
+  fail "no disk has serial $1"
+}
+
+join_vswitch() {
+  local vlan=$1 address=$2 gateway=$3 server=$4
+  ip link add link "$(public_link)" name "$vswitch_link" type vlan id "$vlan"
+  ip link set "$vswitch_link" mtu "$vswitch_mtu" up
+  ip addr add "$address" dev "$vswitch_link"
+  ip route add "$server/32" via "$gateway" dev "$vswitch_link"
+}
+
+# fetch retries while the image server still builds the image, and stops at once on a key other than the pinned one.
+# Given a disk it streams the image onto it, and otherwise it asks only for the image's headers.
+fetch() {
+  local url=$1 pin=$2 disk=${3:-} n=0 statuses
+  local args=(--silent --show-error --fail --insecure --pinnedpubkey "$pin" --connect-timeout 10)
+  while :; do
+    n=$((n + 1))
+    set +e
+    if [ -n "$disk" ]; then
+      curl "${args[@]}" "$url" | dd of="$disk" bs=4M conv=notrunc,fsync status=none
+      statuses=("${PIPESTATUS[@]}")
+    else
+      curl "${args[@]}" --head "$url" > /dev/null
+      statuses=("$?" 0)
+    fi
+    set -e
+    [ "${statuses[*]}" = "0 0" ] && return 0
+    if [ "${statuses[0]}" -eq "$pin_refused" ]; then
+      fail "$url presented a key other than the pinned $pin, so nothing more is written"
+    fi
+    [ "$n" -lt "$attempts" ] || fail "$url gave no answer in $attempts attempts, the last ending with curl status ${statuses[0]}"
+    sleep "$interval"
+  done
+}
+
+# write_image clears the disks only once the image server answered with the pinned key over the vSwitch.
+write_image() {
+  [ "$#" -eq 7 ] || fail "usage: rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>"
+  local disk tool url="https://$4:$5/image.raw"
+  for tool in curl dd wipefs sgdisk mdadm; do
+    command -v "$tool" > /dev/null || fail "the rescue system has no $tool, so no disk was touched"
+  done
+  disk=$(disk_with_serial "$7")
+  join_vswitch "$1" "$2" "$3" "$4"
+  fetch "$url" "$6"
+  clear_disks
+  fetch "$url" "$6" "$disk"
+  sync
+  ip link del "$vswitch_link"
+  echo "rescue: wrote the image to $disk, serial $7"
+}
+
+case ${1:-} in
+  read) read_hardware ;;
+  write) shift && write_image "$@" ;;
+  *) fail "usage: rescue.sh read | rescue.sh write ..." ;;
+esac
+
+== rescue session 2 command ==
+bash -s -- write 4000 10.0.1.2/24 10.0.1.1 127.0.0.1 <port> <pin> S675NF0WC35363
+== rescue session 2 stdin ==
+#!/usr/bin/env bash
+# Runs in Hetzner's rescue system on a Robot worker. "read" prints each disk
+# with its serial, the MAC of the card the default route leaves by, and
+# whether the firmware booted by UEFI. "write" brings up the vSwitch VLAN,
+# waits until the install's image server answers over it, clears every disk's
+# arrays and signatures, and streams the image onto the disk with the given
+# serial.
+# Usage: rescue.sh read
+#        rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>
+#   RESCUE_SYS, RESCUE_DEV, RESCUE_FETCH_ATTEMPTS and RESCUE_FETCH_INTERVAL
+#   default to /sys, /dev, 90 and 10 seconds.
+# It exists because Robot names no host key for the rescue system, so the
+# session that runs this carries no secret: the image, which holds the
+# cluster's keys, reaches the disk only over the vSwitch, from a server whose
+# TLS key the rescue checks against the pin.
+set -euo pipefail
+
+readonly sys=${RESCUE_SYS:-/sys}
+readonly dev=${RESCUE_DEV:-/dev}
+readonly attempts=${RESCUE_FETCH_ATTEMPTS:-90}
+readonly interval=${RESCUE_FETCH_INTERVAL:-10}
+readonly vswitch_link=vsw0
+readonly vswitch_mtu=1400
+# curl's exit status when the server's key is not the pinned one.
+readonly pin_refused=90
+
+fail() {
+  echo "rescue: $*" >&2
+  exit 1
+}
+
+# disks prints the kernel name of each NVMe and SATA disk.
+disks() {
+  local d
+  for d in "$sys"/block/nvme*n* "$sys"/block/sd*; do
+    [ -e "$d" ] || continue
+    echo "${d##*/}"
+  done
+}
+
+serial_of() {
+  local d=$sys/block/$1
+  tr -d ' \n' < "$d/device/serial" 2> /dev/null || tr -d ' \n' < "$d/serial" 2> /dev/null || true
+}
+
+public_link() {
+  local link
+  link=$(ip -o route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')
+  [ -n "$link" ] || fail "found no default route, so no public card"
+  echo "$link"
+}
+
+read_hardware() {
+  local d link mac size
+  if [ -d "$sys/firmware/efi" ]; then echo "efi yes"; else echo "efi no"; fi
+  link=$(public_link)
+  mac=$(cat "$sys/class/net/$link/address")
+  echo "mac $mac"
+  for d in $(disks); do
+    size=$(cat "$sys/block/$d/size")
+    echo "disk $d $(serial_of "$d") $((size * 512))"
+  done
+}
+
+# clear_disks stops every array and volume group and wipes every signature, as the trial did before its write.
+clear_disks() {
+  local d part md vg
+  for vg in $(vgs --noheadings -o vg_name 2> /dev/null || true); do
+    vgchange -an "$vg"
+  done
+  for md in "$dev"/md[0-9]*; do
+    [ -e "$md" ] && mdadm --stop "$md"
+  done
+  for d in $(disks); do
+    for part in "$sys/block/$d/$d"*; do
+      [ -e "$part" ] || continue
+      mdadm --zero-superblock "$dev/${part##*/}" 2> /dev/null || true
+      wipefs -a "$dev/${part##*/}"
+    done
+    wipefs -a "$dev/$d"
+    sgdisk --zap-all "$dev/$d"
+  done
+}
+
+disk_with_serial() {
+  local d
+  for d in $(disks); do
+    if [ "$(serial_of "$d")" = "$1" ]; then
+      echo "$dev/$d"
+      return
+    fi
+  done
+  fail "no disk has serial $1"
+}
+
+join_vswitch() {
+  local vlan=$1 address=$2 gateway=$3 server=$4
+  ip link add link "$(public_link)" name "$vswitch_link" type vlan id "$vlan"
+  ip link set "$vswitch_link" mtu "$vswitch_mtu" up
+  ip addr add "$address" dev "$vswitch_link"
+  ip route add "$server/32" via "$gateway" dev "$vswitch_link"
+}
+
+# fetch retries while the image server still builds the image, and stops at once on a key other than the pinned one.
+# Given a disk it streams the image onto it, and otherwise it asks only for the image's headers.
+fetch() {
+  local url=$1 pin=$2 disk=${3:-} n=0 statuses
+  local args=(--silent --show-error --fail --insecure --pinnedpubkey "$pin" --connect-timeout 10)
+  while :; do
+    n=$((n + 1))
+    set +e
+    if [ -n "$disk" ]; then
+      curl "${args[@]}" "$url" | dd of="$disk" bs=4M conv=notrunc,fsync status=none
+      statuses=("${PIPESTATUS[@]}")
+    else
+      curl "${args[@]}" --head "$url" > /dev/null
+      statuses=("$?" 0)
+    fi
+    set -e
+    [ "${statuses[*]}" = "0 0" ] && return 0
+    if [ "${statuses[0]}" -eq "$pin_refused" ]; then
+      fail "$url presented a key other than the pinned $pin, so nothing more is written"
+    fi
+    [ "$n" -lt "$attempts" ] || fail "$url gave no answer in $attempts attempts, the last ending with curl status ${statuses[0]}"
+    sleep "$interval"
+  done
+}
+
+# write_image clears the disks only once the image server answered with the pinned key over the vSwitch.
+write_image() {
+  [ "$#" -eq 7 ] || fail "usage: rescue.sh write <vlan> <address/prefix> <vswitch gateway> <image server> <port> <pin> <serial>"
+  local disk tool url="https://$4:$5/image.raw"
+  for tool in curl dd wipefs sgdisk mdadm; do
+    command -v "$tool" > /dev/null || fail "the rescue system has no $tool, so no disk was touched"
+  done
+  disk=$(disk_with_serial "$7")
+  join_vswitch "$1" "$2" "$3" "$4"
+  fetch "$url" "$6"
+  clear_disks
+  fetch "$url" "$6" "$disk"
+  sync
+  ip link del "$vswitch_link"
+  echo "rescue: wrote the image to $disk, serial $7"
+}
+
+case ${1:-} in
+  read) read_hardware ;;
+  write) shift && write_image "$@" ;;
+  *) fail "usage: rescue.sh read | rescue.sh write ..." ;;
+esac
