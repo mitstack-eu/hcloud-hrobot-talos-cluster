@@ -22,7 +22,7 @@ inside the configuration itself.
 
 | Component | What it does | How the node gets it |
 |---|---|---|
-| Cilium and Argo CD | The cluster's network and the sync of the cluster repository | Served |
+| Cilium and Argo CD | The cluster's network, and the sync of the cluster repository with each Application's outcome posted to the platform's `/v1/gitops-notifications`, where a block waiting on Argo CD's verdict reads it | Served |
 | Kyverno | The admission engine that runs the four policies below | Served |
 | `mitstack-require-app-label` | Refuses a pod without a non-empty `mitstack.dev/app` label | Inline |
 | `mitstack-generate-default-deny` | Gives every namespace outside the system list a `mitstack-default-deny` network policy | Inline |
@@ -35,7 +35,7 @@ inside the configuration itself.
 | CloudNativePG | The Postgres operator, in `cnpg-system` | Served, its namespace inline |
 | `mitstack-database-slices` | Lets a database slice's Postgres instances reach the API server and each other, and admits the operator on port 8000 and every slice on port 5432, each also on the mesh's port 15008 | Inline |
 | The local path provisioner | Gives each storage claim that names no class a directory on its node's own disk, through the default StorageClass `local-path` | Served, its namespace and network policy inline |
-| The node report, the enrolment Job and the token renewal | The block's own workloads, in `mitstack-node` | Inline |
+| The node report, the enrolment Job and the token renewal | The block's own workloads, in `mitstack-node`. The enrolment Job keeps the platform's URL and the notification token of its enrolment answer in `argocd-notifications-secret`, which Argo CD's posts carry | Inline |
 
 The block sets `AppsOnWorkers` on the plane, so the control-plane nodes keep
 Talos's `NoSchedule` taint and app pods run only on the worker. Cilium,
