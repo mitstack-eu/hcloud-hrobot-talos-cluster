@@ -19,7 +19,6 @@ import (
 	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/ssh"
 )
 
 const testServer = 3041839
@@ -44,7 +43,7 @@ func newHarness(t *testing.T, dc string) *harness {
 		robot: fake, rescue: rescue, cloud: cloud,
 		installer: Installer{
 			Robot: fake.Client(), Cloud: cloud, Cluster: testutil.NewCluster(t), From: netip.MustParseAddr("198.51.100.7"),
-			RescueAddress: func(string) string { return rescue.addr }, DialInterval: 10 * time.Millisecond,
+			RescueAddress: func(string) string { return rescue.Addr }, DialInterval: 10 * time.Millisecond,
 		},
 		worker: Worker{
 			Server: testServer, Name: "mitstack-shop-wk1", VSwitch: "mitstack-shop", Hostname: "shop-wk1",
@@ -58,6 +57,8 @@ func (h *harness) install(*testing.T) error { return h.installWithin(time.Minute
 func (h *harness) installWithin(d time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
+	h.rescue.SetEnv(h.rescue.env)
+	defer h.rescue.record()
 	return h.installer.Install(ctx, h.worker)
 }
 
@@ -88,9 +89,9 @@ func TestInstall_WritesTheMetalImageOverTheVSwitchInEachLocation(t *testing.T) {
 			h := newHarness(t, tc.dc)
 			switch tc.hostKey {
 			case "md5":
-				h.robot.HostKeys = []string{ssh.FingerprintLegacyMD5(h.rescue.signer.PublicKey())}
+				h.robot.HostKeys = []string{h.rescue.FingerprintMD5()}
 			case "sha256":
-				h.robot.HostKeys = []string{ssh.FingerprintSHA256(h.rescue.signer.PublicKey())}
+				h.robot.HostKeys = []string{h.rescue.FingerprintSHA256()}
 			}
 
 			require.NoError(t, h.install(t))
@@ -109,7 +110,7 @@ func TestInstall_WritesTheMetalImageOverTheVSwitchInEachLocation(t *testing.T) {
 			assertCleanedUp(t, h)
 
 			require.Len(t, h.cloud.created, 1)
-			assert.Equal(t, ImageServer{Name: "mitstack-shop-wk1-image", Location: tc.location, Image: "docker-ce", UserData: h.cloud.created[0].UserData}, h.cloud.created[0])
+			assert.Equal(t, robot.ShortLivedServer{Name: "mitstack-shop-wk1-image", Location: tc.location, Image: "docker-ce", UserData: h.cloud.created[0].UserData}, h.cloud.created[0])
 			config := userDataFiles(t, h.cloud.created[0].UserData)[serveConfigPath]
 			assert.Contains(t, config, `mac(link.permanent_addr) == "`+testMAC+`"`)
 			assert.Contains(t, config, "shop-wk1")

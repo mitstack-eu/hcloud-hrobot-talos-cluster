@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed testdata/type-snapshot.json
+//go:embed type-snapshot.json
 var typeSnapshotJSON []byte
 
 // clusterProvider lists what carries the subscription's labels, topics or Robot name, and loses a declared resource

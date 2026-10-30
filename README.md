@@ -178,7 +178,7 @@ It then deletes the repo when it carries the two GitHub topics the block set on 
 ├── teardown.go              runs the unsubscribe
 ├── robotworker/             writes a Robot server's Talos disk from its rescue system
 ├── *_test.go                the rest of the tests, listed in docs/
-└── testdata/                the platform's type snapshot
+└── type-snapshot.json       the platform's resource types the manifest names
 ```
 
 ## Go deeper

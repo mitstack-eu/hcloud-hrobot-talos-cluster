@@ -168,17 +168,17 @@ func (e *env) install(ctx context.Context, i robotworker.Installer, w robotworke
 	if err := i.Robot.WriteFirewall(ctx, w.Server, robotworker.Firewall(i.Cluster.Network, w)); err != nil {
 		return err
 	}
-	id, err := i.Cloud.CreateImageServer(ctx, robotworker.ImageServer{Name: w.Name + "-image", Location: server.Location(), Image: robotworker.ImageServerImage})
+	id, err := i.Cloud.CreateServer(ctx, robot.ShortLivedServer{Name: w.Name + "-image", Location: server.Location(), Image: robotworker.ImageServerImage})
 	if err != nil {
 		return err
 	}
 	call.gatewayHeld = e.gatewayHolds(controlplane.GatewayAddress)
-	addr, err := i.Cloud.ImageServerAddress(ctx, id)
+	addr, err := i.Cloud.ServerAddress(ctx, id)
 	if err != nil {
 		return err
 	}
 	call.imageServer = addr.String()
-	if err := i.Cloud.DeleteImageServer(ctx, id); err != nil {
+	if err := i.Cloud.DeleteServer(ctx, id); err != nil {
 		return err
 	}
 	return e.installErr

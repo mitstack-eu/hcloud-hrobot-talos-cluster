@@ -3,25 +3,21 @@ package robotworker
 
 import (
 	"context"
-	"errors"
+	_ "embed"
 	"fmt"
-	"net"
 	"net/netip"
-	"slices"
 	"time"
 
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
+	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh"
 	"github.com/mitstack-eu/block-kit/handler"
 	"github.com/mitstack-eu/talos-cluster-kit/nodeconfig"
 )
 
-// Locations are where a Robot server's vSwitch reaches the cluster's Cloud network.
-var Locations = []string{"fsn1", "nbg1", "hel1"}
+//go:embed scripts/rescue.sh
+var rescueScript []byte
 
-// ImageServerImage carries docker, zstd and python3.
 const ImageServerImage = "docker-ce"
-
-const cleanupTimeout = 10 * time.Minute
 
 type Worker struct {
 	Server   int64
@@ -30,26 +26,12 @@ type Worker struct {
 	Hostname string
 	// Address lies on the vSwitch subnet, whose first address is Hetzner's vSwitch gateway.
 	Address netip.Prefix
-	// Rules are the firewall input rules the cluster needs beyond the replies to the node's own traffic and ICMP.
-	Rules []robot.Rule
-}
-
-type ImageServer struct {
-	Name, Location, Image string
-	// UserData holds every key of the cluster, so the server is deleted after use.
-	UserData string
-}
-
-// Cloud places the image server in the cluster's Cloud network, whose subnet is coupled to the vSwitch.
-type Cloud interface {
-	CreateImageServer(ctx context.Context, s ImageServer) (int64, error)
-	ImageServerAddress(ctx context.Context, id int64) (netip.Addr, error)
-	DeleteImageServer(ctx context.Context, id int64) error
+	Rules   []robot.Rule
 }
 
 type Installer struct {
 	Robot   *robot.Client
-	Cloud   Cloud
+	Cloud   robot.Cloud
 	Cluster nodeconfig.Cluster
 	// From is the public IPv4 address the rescue session leaves from, the one address the firewall admits SSH from.
 	From          netip.Addr
@@ -57,144 +39,48 @@ type Installer struct {
 	DialInterval  time.Duration
 }
 
-// Install runs once from adoption to the reset that boots the written disk, taking longer than a subscribe waits,
-// so a block runs it in the background. It refuses a server outside Locations before any write.
-func (i Installer) Install(ctx context.Context, w Worker) (err error) {
-	server, err := i.Robot.GetServer(ctx, w.Server)
-	if err != nil && robot.ErrorCode(err) != "SERVER_NOT_FOUND" {
-		return fmt.Errorf("reading dedicated server %d: %w", w.Server, err)
-	}
-	if err == nil && !slices.Contains(Locations, server.Location()) {
-		return handler.Refuse("location-unsupported", "dedicated server %d is in %s, and a Robot worker is installed only in fsn1, nbg1 or hel1, where its vSwitch reaches the cluster's Cloud network, so nothing was changed",
-			w.Server, server.DC)
-	}
-	if server, err = i.Robot.Adopt(ctx, w.Server, w.Name); err != nil {
-		return err
-	}
-	vs, err := i.Robot.Couple(ctx, w.VSwitch, w.Server)
-	if err != nil {
-		return fmt.Errorf("coupling server %d to vSwitch %s: %w", w.Server, w.VSwitch, err)
-	}
-	if err := i.Robot.WriteFirewall(ctx, w.Server, Firewall(i.Cluster.Network, w)); err != nil {
-		return fmt.Errorf("writing the worker firewall of server %d: %w", w.Server, err)
-	}
-	restore, err := i.Robot.OpenRescueWindow(ctx, w.Server, i.From)
-	if err != nil {
-		return err
-	}
-	job := &install{Installer: i, worker: w, server: server, vlan: vs.VLAN}
-	defer func() { err = errors.Join(err, job.cleanUp(ctx, restore)) }()
-	return job.run(ctx)
+// Install runs block-kit's Robot install with the image server, which holds every key of the cluster, as its hand-off.
+func (i Installer) Install(ctx context.Context, w Worker) error {
+	install := robot.Installer{Robot: i.Robot, Cloud: i.Cloud, Dial: i.dial, From: i.From, RescueAddress: i.RescueAddress}
+	target := robot.Target{Server: w.Server, Name: w.Name, VSwitch: w.VSwitch, Address: w.Address, Firewall: Firewall(i.Cluster.Network, w)}
+	return install.Install(ctx, target, func(hw robot.Hardware, vlan int, location string) (robot.HandOff, error) {
+		return i.imageServer(w, hw, vlan, location)
+	})
 }
 
-// Firewall is the worker's firewall: the replies to its own traffic, ICMP from the cluster's network, and w's rules.
 func Firewall(network netip.Prefix, w Worker) robot.Firewall {
 	rules := append(robot.ReplyRules(), robot.Rule{Name: "icmp from network", IPVersion: "ipv4", SrcIP: network.String(), Protocol: "icmp", Action: "accept"})
 	return robot.Firewall{Status: "active", FilterIPv6: true, WhitelistHOS: true, Input: append(rules, w.Rules...)}
 }
 
-type install struct {
-	Installer
-	worker  Worker
-	server  robot.Server
-	vlan    int
-	session *robot.RescueSession
-	imageID int64
+func (i Installer) dial(ctx context.Context, addr string, key robot.RescueKey, s robot.RescueSession) (robot.RescueShell, error) {
+	session, err := rescuessh.Config{Script: rescueScript, Interval: i.DialInterval}.Dial(ctx, addr, key.PrivateKey(), s.Server, s.HostKeys)
+	if err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
-func (j *install) run(ctx context.Context) error {
-	keyName := j.worker.Name + "-rescue"
-	// An install that died before its cleanup leaves its key behind.
-	if err := j.Robot.DeleteKeys(ctx, keyName); err != nil {
-		return err
+// imageServer refuses a server that did not boot by UEFI, the only boot the trial proved.
+func (i Installer) imageServer(w Worker, hw robot.Hardware, vlan int, location string) (robot.HandOff, error) {
+	if !hw.EFI {
+		return robot.HandOff{}, handler.Refuse("firmware-not-uefi", "the server's firmware did not boot the rescue system by UEFI, and Talos's unified kernel image is written only for a UEFI boot")
 	}
-	key, err := robot.NewRescueKey()
-	if err != nil {
-		return err
-	}
-	session, err := j.Robot.BootRescue(ctx, j.worker.Server, keyName, key)
-	if session.Fingerprint != "" {
-		j.session = &session
-	}
-	if err != nil {
-		return err
-	}
-	rescue, err := dialRescue(ctx, j.rescueAddress(), key, session, j.dialInterval())
-	if err != nil {
-		return err
-	}
-	defer rescue.Close()
-	hw, err := readHardware(ctx, rescue)
-	if err != nil {
-		return err
-	}
-	vswitch := &nodeconfig.VSwitch{MAC: hw.mac, VLAN: uint16(j.vlan), Address: j.worker.Address}
-	cluster := j.Cluster
+	vswitch := &nodeconfig.VSwitch{MAC: hw.MAC, VLAN: uint16(vlan), Address: w.Address}
+	cluster := i.Cluster
 	cluster.Profile = nodeconfig.Metal
-	config, err := nodeconfig.RenderWorker(cluster, nodeconfig.Node{Hostname: j.worker.Hostname, VSwitch: vswitch})
+	config, err := nodeconfig.RenderWorker(cluster, nodeconfig.Node{Hostname: w.Hostname, VSwitch: vswitch})
 	if err != nil {
-		return fmt.Errorf("rendering the worker configuration of server %d: %w", j.worker.Server, err)
+		return robot.HandOff{}, fmt.Errorf("rendering the worker configuration of server %d: %w", w.Server, err)
 	}
-	serve, err := j.startImageServer(ctx, config)
-	if err != nil {
-		return err
-	}
-	if err := writeImage(ctx, rescue, j.vlan, j.worker.Address, serve, hw.disk); err != nil {
-		return fmt.Errorf("writing the image onto server %d: %w", j.worker.Server, err)
-	}
-	return nil
-}
-
-func (j *install) startImageServer(ctx context.Context, config []byte) (imageFetch, error) {
 	key, err := newServeKey()
 	if err != nil {
-		return imageFetch{}, err
+		return robot.HandOff{}, err
 	}
-	userData, err := imageServerUserData(config, key, j.Cluster.Network, j.worker.Address.Addr())
+	userData, err := imageServerUserData(config, key, i.Cluster.Network, w.Address.Addr())
 	if err != nil {
-		return imageFetch{}, err
+		return robot.HandOff{}, err
 	}
-	id, err := j.Cloud.CreateImageServer(ctx, ImageServer{Name: j.worker.Name + "-image", Location: j.server.Location(), Image: ImageServerImage, UserData: userData})
-	if err != nil {
-		return imageFetch{}, fmt.Errorf("creating the image server of server %d: %w", j.worker.Server, err)
-	}
-	j.imageID = id
-	addr, err := j.Cloud.ImageServerAddress(ctx, id)
-	if err != nil {
-		return imageFetch{}, fmt.Errorf("reading the address of image server %d: %w", id, err)
-	}
-	return imageFetch{server: addr, pin: key.Pin}, nil
-}
-
-// cleanUp runs after every run, written or failed: it deletes the image server and the rescue key, restores the
-// worker firewall and, once the rescue boot began, resets the server so it boots its disk.
-func (j *install) cleanUp(ctx context.Context, restore func(context.Context) error) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
-	defer cancel()
-	var errs []error
-	if j.imageID != 0 {
-		errs = append(errs, j.Cloud.DeleteImageServer(ctx, j.imageID))
-	}
-	if j.session != nil {
-		errs = append(errs, j.Robot.LeaveRescue(ctx, *j.session))
-	}
-	errs = append(errs, restore(ctx))
-	if j.session != nil {
-		errs = append(errs, j.Robot.Reset(ctx, j.worker.Server))
-	}
-	return errors.Join(errs...)
-}
-
-func (j *install) rescueAddress() string {
-	if j.RescueAddress != nil {
-		return j.RescueAddress(j.server.IP)
-	}
-	return net.JoinHostPort(j.server.IP, "22")
-}
-
-func (j *install) dialInterval() time.Duration {
-	if j.DialInterval == 0 {
-		return 10 * time.Second
-	}
-	return j.DialInterval
+	server := robot.ShortLivedServer{Name: w.Name + "-image", Location: location, Image: ImageServerImage, UserData: userData}
+	return robot.HandOff{Server: server, Port: servePort, Pin: key.Pin}, nil
 }
