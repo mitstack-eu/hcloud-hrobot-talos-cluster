@@ -22,15 +22,13 @@ const (
 	readHeaderTimeout = 10 * time.Second
 )
 
-// handlerConfig observes each resource once per verb, since a call held open polling spends the platform's verb timeout.
 func handlerConfig(jwksURL string, logs *webhook.LogBuffer) handler.Config {
 	return handler.Config{
-		Resource:   &blockResource{},
-		Manifest:   manifestYAML,
-		Observers:  observers(),
-		JWKSURL:    jwksURL,
-		Logs:       logs,
-		VerbBudget: 1,
+		Resource:  &blockResource{},
+		Manifest:  manifestYAML,
+		Observers: observers(),
+		JWKSURL:   jwksURL,
+		Logs:      logs,
 	}
 }
 

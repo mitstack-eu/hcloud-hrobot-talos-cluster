@@ -22,9 +22,16 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.11
+  version: 0.3.12
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.12: the block builds on talos-cluster-kit v0.31.0 and block-kit
+    v0.12.2. CloudNativePG's default image is the Postgres 16.15 image
+    postgres-db-kube pins, so the gateway mirrors it and a shared Postgres
+    server's instance starts. Each node report is signed with a token the
+    cluster's API server mints for the report's exact body. A gateway fills
+    its mirror once, when it is created, so only a cluster built on 0.3.12
+    or later serves the 16.15 image.
     0.3.11: the block builds on talos-cluster-kit v0.29.0. On a cluster that
     hosts the platform, cert-manager and trust-manager keep every authority's
     key in the namespace `mitstack-trust`, and OpenBao's authority key moves
