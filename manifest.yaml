@@ -22,9 +22,22 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.10
+  version: 0.3.11
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.11: the block builds on talos-cluster-kit v0.29.0. On a cluster that
+    hosts the platform, cert-manager and trust-manager keep every authority's
+    key in the namespace `mitstack-trust`, and OpenBao's authority key moves
+    there from `openbao`. A second authority, the ClusterIssuer
+    `mitstack-database-ca`, signs the certificate of the shared Postgres
+    server that postgres-db-kube 0.4.0 runs, and trust-manager copies its
+    certificate into the ConfigMap `mitstack-database-ca` in every
+    namespace, so an app connects with `sslmode=verify-full`. A Kyverno
+    policy lets only the `openbao` namespace obtain a certificate from
+    `openbao-ca`, and only a namespace labelled
+    `mitstack.dev/database-slice=true` one from `mitstack-database-ca`.
+    Talos creates these objects once, at the cluster's first build, so only
+    a cluster built on 0.3.11 or later carries them.
     0.3.10: the block builds on talos-cluster-kit v0.28.0. On a cluster that
     hosts the platform, OpenBao's one-time init now also writes the roles
     `app-secrets-reader` and `app-secrets-writer`. Each lets the service
