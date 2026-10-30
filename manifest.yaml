@@ -22,9 +22,13 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.12
+  version: 0.3.13
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.13: the block builds on block-kit v0.14.2, whose Robot package runs
+    the worker's install, and on its rescuessh v0.1.0 module, which holds
+    the rescue system's SSH session. The image server's user data and every
+    command the rescue system receives are byte for byte what 0.3.11 sent.
     0.3.12: the block builds on talos-cluster-kit v0.31.0 and block-kit
     v0.12.2. CloudNativePG's default image is the Postgres 16.15 image
     postgres-db-kube pins, so the gateway mirrors it and a shared Postgres

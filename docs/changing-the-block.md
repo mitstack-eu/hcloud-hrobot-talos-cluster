@@ -57,9 +57,9 @@ them, and adds its own files after.
 | `teardown_test.go` | Proves that unsubscribe deletes every resource, the snapshot included |
 | `.github/` | `workflows/ci.yml`, which this block has in place of the scaffold's `block-verify.yml`. It calls block-kit's publish workflow, whose `block / conformance`, `block / secrets` and `block / scripts` checks `main` requires, and which publishes the image on a push to `main` |
 
-The scaffold's `resource_test.go`, `verbsemantics_test.go` and
-`types/snapshot.json` are not in this repository. Its copy of the platform's
-type snapshot sits at `testdata/type-snapshot.json` instead.
+The scaffold's `resource_test.go` and `verbsemantics_test.go` are not in this
+repository. Its copy of the platform's type snapshot sits at the root as
+`type-snapshot.json`, where blockverify reads it.
 
 ## Files this block adds
 
@@ -83,4 +83,4 @@ type snapshot sits at `testdata/type-snapshot.json` instead.
 | `manifest_test.go` | Proves the manifest's type, resources, description and settle budget, and that every declared resource has an observer |
 | `ci_kit_test.go` | Proves that `go.mod` and `ci.yml` name one block-kit release, one that runs the shared scans |
 | `declared_resources_test.go` | Runs block-kit's block guards |
-| `testdata/` | `type-snapshot.json`, the platform's resource types the tests read |
+| `type-snapshot.json` | The platform's resource types the manifest names, which blockverify and `declared_resources_test.go` read |

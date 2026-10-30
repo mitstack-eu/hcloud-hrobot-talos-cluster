@@ -10,27 +10,31 @@ defines block, kit and operator.
 
 The install follows what one live trial measured, recorded in the
 note [Talos Linux on a Hetzner Robot server behind a vSwitch gateway](https://github.com/mitstack-eu/mitstack-workspace/blob/main/product/knowledge/2026-10-28-talos-on-a-hetzner-robot-server-behind-a-vswitch-gateway.md).
-Robot's own calls come from block-kit's package `capabilities/hetzner/robot`,
-and the worker's configuration and image from talos-cluster-kit.
+Robot's calls and the install's order come from block-kit's package
+`capabilities/hetzner/robot`, and the rescue system's SSH session from
+block-kit's module `capabilities/hetzner/robot/rescuessh`. The worker's
+configuration and image come from talos-cluster-kit.
 
 ## What a run does
 
-`Installer.Install` in `robotworker/install.go` runs once, from adoption to the
-reset that boots the written disk. A run takes longer than the two minutes a
+`Installer.Install` in `robotworker/install.go` runs block-kit's
+`robot.Installer` once, from adoption to the reset that boots the written disk.
+The block supplies the rescue script, the image server and the worker's
+firewall. A run takes longer than the two minutes a
 subscribe waits for each answer, so the block starts it in the background.
 
 | Install part | Where it lives | Note section it follows |
 |---|---|---|
-| Refuse a server outside fsn1, nbg1 and hel1 before any write | `Install` | How the vSwitch and the Robot firewall carry the gateway |
+| Refuse a server outside fsn1, nbg1 and hel1 before any write | `robot.Installer` | How the vSwitch and the Robot firewall carry the gateway |
 | Adopt and name the server, then couple it to the cluster's vSwitch | `robot.Adopt`, `robot.Couple` | How the trial ran |
-| Write the worker firewall: TCP, DNS and NTP replies, ICMP from the network, and the cluster's own flows, with `whitelist_hos` true | `Installer.firewall` | How the vSwitch and the Robot firewall carry the gateway |
+| Write the worker firewall: TCP, DNS and NTP replies, ICMP from the network, and the cluster's own flows, with `whitelist_hos` true | `Firewall` | How the vSwitch and the Robot firewall carry the gateway |
 | Admit SSH from the installer's address alone, boot the rescue system with a one-time key, and expect no host key | `robot.OpenRescueWindow`, `robot.BootRescue` | How the rescue boot depends on the firewall |
-| Read the firmware, the public card's MAC and each disk's serial | `readHardware`, `rescue.sh read` | How the image reaches the disks |
-| Refuse a server that did not boot by UEFI | `readHardware` | How the firmware boots the unified kernel image |
+| Read the firmware, the public card's MAC and each disk's serial | `robot.Installer`, `rescue.sh read` | How the image reaches the disks |
+| Refuse a server that did not boot by UEFI | `Installer.imageServer` | How the firmware boots the unified kernel image |
 | Render the worker with its hostname and vSwitch link, found by MAC | `nodeconfig.RenderWorker` | How the node gets its name and addresses |
 | Build the `metal` image on a short-lived Cloud server, the image server | `build-and-serve.sh` | What the kit lacks for a Robot node |
 | Bring up the vSwitch VLAN and wait until the image server answers with the pinned key, then stop every array, clear every signature, and write the image onto the disk with the first serial | `rescue.sh write` | How the image reaches the disks |
-| Delete the key, restore the worker firewall and reset with no rescue active | `install.cleanUp` | What Robot answered |
+| Delete the image server and the key, restore the worker firewall, and reset with no rescue active, on success and on failure | `robot.Installer` | What Robot answered |
 
 The install chooses its disk by serial because the kernel's disk names changed
 between boots on the trial. Of two disks, it takes the one whose serial sorts
@@ -72,7 +76,7 @@ key. The image server knows its client only by source address, so a server on
 the same vSwitch that claimed the worker's address could fetch the image. Only
 servers of the same Robot account can join that vSwitch.
 
-When Robot does name host keys, the session accepts only those, by MD5 or
+When Robot does name host keys, `rescuessh` accepts only those, by MD5 or
 SHA-256 fingerprint. No live answer has shown the form Robot names them in,
 since the trial got none.
 
@@ -83,8 +87,8 @@ session received.
 
 ## What the block provides
 
-The package defines the interface `Cloud` and leaves its Hetzner Cloud side to
-the block. `imageCloud` in `worker.go` implements it. Before it creates the
+block-kit's package defines the interface `robot.Cloud` and leaves its Hetzner
+Cloud side to the block. `imageCloud` in `worker.go` implements it. Before it creates the
 image server, it couples the vSwitch to the cluster's Cloud network as the
 subnet `10.0.1.0/24`, with the network's routes exposed to the vSwitch, which
 the trial needed for the route to the gateway. It then waits until the gateway
@@ -116,10 +120,11 @@ curl, python3 and zstd on the machine.
 | `TestInstall_StopsAndCleansUpWhenTheImageServerPresentsAnotherKey` | The rescue writes nothing when the pin does not match, and the run cleans up |
 | `TestInstall_LeavesTheDisksAloneWhenTheImageServerNeverAnswers` | No disk is cleared when the image server never answers, and the run cleans up |
 | `TestInstall_GivesUpOnARescueSystemThatNeverAnswersTheHandshake` | A rescue system that accepts the connection and stalls ends the run with its context, and the key and the firewall are cleaned up |
+| `TestInstall_RendersTheGoldenUserDataAndRescueCommandsInEachLocation` | The image server's user data and every rescue session command match `robotworker/testdata/install.golden`, with the TLS key, its pin and the port masked |
 | `TestBuildAndServe_BuildsTheMetalImageDiscardingImagerOutputAndServesItToTheWorker` | The image server builds the `metal` image and serves it decompressed |
 
-The Robot fake is block-kit's `robottest`, the rescue system is an SSH server
-in the test, and the image server is the kit's serve program itself on
+The Robot fake is block-kit's `robottest`, the rescue system is block-kit's
+SSH server `rescuesshtest`, and the image server is the kit's serve program itself on
 `127.0.0.1`.
 
 ## What no run has shown yet

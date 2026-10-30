@@ -220,7 +220,7 @@ func (t robotTarget) admits(ctx context.Context) error {
 		return fmt.Errorf("reading dedicated server %d: %w", t.server, err)
 	case server.Cancelled:
 		return handler.Refuse("server-cancelled", "dedicated server %d is cancelled, so no worker is installed over it and nothing was changed", t.server)
-	case !slices.Contains(robotworker.Locations, server.Location()):
+	case !slices.Contains(robot.Locations, server.Location()):
 		return handler.Refuse("location-unsupported",
 			"dedicated server %d is in %s, and a worker runs only in fsn1, nbg1 or hel1, where its vSwitch reaches the cluster's Cloud network, so nothing was changed", t.server, server.DC)
 	case server.Name != t.name && strings.HasPrefix(server.Name, robot.NamePrefix):
@@ -343,9 +343,9 @@ type imageCloud struct {
 	vswitch string
 }
 
-// CreateImageServer couples the vSwitch's subnet to the network first, so the server reaches the worker, and waits
+// CreateServer couples the vSwitch's subnet to the network first, so the server reaches the worker, and waits
 // for the gateway to hold its address, since a server joining before it would take that address.
-func (c imageCloud) CreateImageServer(ctx context.Context, s robotworker.ImageServer) (int64, error) {
+func (c imageCloud) CreateServer(ctx context.Context, s robot.ShortLivedServer) (int64, error) {
 	if err := c.coupleSubnet(ctx); err != nil {
 		return 0, err
 	}
@@ -394,7 +394,7 @@ func (c imageCloud) awaitGateway(ctx context.Context) (int64, error) {
 	}
 }
 
-func (c imageCloud) ImageServerAddress(ctx context.Context, id int64) (netip.Addr, error) {
+func (c imageCloud) ServerAddress(ctx context.Context, id int64) (netip.Addr, error) {
 	servers, err := c.plane.API.ListServers(ctx, c.plane.RoleSelector(roleImageServer))
 	if err != nil {
 		return netip.Addr{}, err
@@ -406,6 +406,6 @@ func (c imageCloud) ImageServerAddress(ctx context.Context, id int64) (netip.Add
 	return netip.ParseAddr(servers[i].PrivateIPs[c.network])
 }
 
-func (c imageCloud) DeleteImageServer(ctx context.Context, id int64) error {
+func (c imageCloud) DeleteServer(ctx context.Context, id int64) error {
 	return c.plane.API.DeleteServer(ctx, id)
 }

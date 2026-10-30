@@ -77,8 +77,10 @@ github.com/mdlayher/netlink v1.11.2 h1:HKh2jqe+omdSWcQ88nrT7INE61B0NXfiSPFdgL4Yb
 github.com/mdlayher/netlink v1.11.2/go.mod h1:uT2Yc/QLaZubzDpZIBi9d4GoeLwtp3x1AMeqSRrK2sA=
 github.com/mdlayher/socket v0.6.1 h1:M7uj2NtuujUY4mYr1C57NmfNiRHbkKpnBxO856lsc3A=
 github.com/mdlayher/socket v0.6.1/go.mod h1:+/SGtqc9V+5dAuRgQsU0fGBI+oRDiW7O2Obx10OIWfg=
-github.com/mitstack-eu/block-kit v0.12.2 h1:z/t+wb8XNvhpERrWsnPSJ+/lIos1A+LUPRExU4GEBZo=
-github.com/mitstack-eu/block-kit v0.12.2/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
+github.com/mitstack-eu/block-kit v0.14.2 h1:oYN9zoRfJGKScrvaDBCvaslzhn6/1Mp9m1oM/4DbCJA=
+github.com/mitstack-eu/block-kit v0.14.2/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
+github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh v0.1.0 h1:ll1Mn9RqbQqXLYfxqDjwFClqT2XAuSyH6ywRqQ7EfuA=
+github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh v0.1.0/go.mod h1:LZZ/5CsJkJ6BQczmnDA5Pb4+tu1iLzI7YiMmaQsDo34=
 github.com/mitstack-eu/talos-cluster-kit v0.31.0 h1:kcP1jeuGf1VznlNlcjrQvWA7Z/1htppLOvt6plLNGdc=
 github.com/mitstack-eu/talos-cluster-kit v0.31.0/go.mod h1:MyXiGl5YjYNctpTi6teL23TAAfjLcigjNOYXidKzbwg=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=

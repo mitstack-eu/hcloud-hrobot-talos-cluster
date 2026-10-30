@@ -4,7 +4,8 @@ go 1.26.10
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1
-	github.com/mitstack-eu/block-kit v0.12.2
+	github.com/mitstack-eu/block-kit v0.14.2
+	github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh v0.1.0
 	github.com/mitstack-eu/talos-cluster-kit v0.31.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
