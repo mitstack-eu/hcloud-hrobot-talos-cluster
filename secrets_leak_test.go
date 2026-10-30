@@ -3,7 +3,6 @@ package main
 // No secret a request carries reaches an answer or the /logs buffer, on the success paths or an error that quotes it.
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"testing"
@@ -50,8 +49,6 @@ func leakServer(t *testing.T, e *env) func(*webhook.LogBuffer) (http.Handler, *k
 		signer := kittest.NewSigner(t, "kid-hcloud-hrobot-talos-cluster", 41)
 		cfg := handlerConfig(signer.JWKSServer(t), logs)
 		cfg.Resource = e.block
-		cfg.VerbBudget = 3
-		cfg.Sleep = func(context.Context, time.Duration) {}
 		h, err := handler.New(cfg)
 		require.NoError(t, err)
 		return h, signer

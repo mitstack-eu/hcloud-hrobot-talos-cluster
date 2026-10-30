@@ -85,8 +85,8 @@ dedicated server and refuses one it cannot adopt, before it changes anything.
 
 Each subscribe call then takes one stage that waits on Hetzner and answers
 pending. The network and the repository need no wait, so a call makes them
-beside its stage. The handler observes each resource once per call, through
-`VerbBudget: 1` in `main.go`, so no call is held open polling either.
+beside its stage. block-kit's handler observes each resource once per call
+and holds no poll, so no call is held open polling either.
 
 While a subscription settles, the platform polls it with validate. The block's
 validate answers `redrive` beside `pending` whenever a subscribe sent now would

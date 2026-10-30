@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
+	"github.com/mitstack-eu/block-kit/helpers/reportproof"
 	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 )
 
@@ -13,16 +14,17 @@ const blockID = "hcloud-hrobot-talos-cluster"
 
 func newPlane(api controlplane.API, subID, appName string) controlplane.Plane {
 	return controlplane.Plane{
-		API:             api,
-		Block:           blockID,
-		Subscription:    subID,
-		AppName:         appName,
-		ServerType:      controlplane.DefaultServerType,
-		Boundary:        userDataBoundary,
-		PlatformURL:     platformURL,
-		Now:             clock,
-		AppsOnWorkers:   true,
-		WorkerAddresses: []string{workerAddress.Addr().String()},
+		API:               api,
+		Block:             blockID,
+		Subscription:      subID,
+		AppName:           appName,
+		ServerType:        controlplane.DefaultServerType,
+		Boundary:          userDataBoundary,
+		PlatformURL:       platformURL,
+		ReportProofScript: reportproof.TokenRequestScript,
+		Now:               clock,
+		AppsOnWorkers:     true,
+		WorkerAddresses:   []string{workerAddress.Addr().String()},
 	}
 }
 

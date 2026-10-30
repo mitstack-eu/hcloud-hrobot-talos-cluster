@@ -59,7 +59,7 @@ func TestSubscribe_ACloudNodeBootsOnlyOnceTheGatewaysMirrorIsCompleteAndTheClust
 	}
 }
 
-func TestSubscribe_EachCallWaitsOnOneHetznerActionAtMostAndHoldsNoPoll(t *testing.T) {
+func TestSubscribe_EachCallWaitsOnOneHetznerActionAtMost(t *testing.T) {
 	e := newEnv(t)
 	p := e.engine()
 
@@ -68,7 +68,6 @@ func TestSubscribe_EachCallWaitsOnOneHetznerActionAtMostAndHoldsNoPoll(t *testin
 	for _, a := range p.posted {
 		assert.LessOrEqual(t, a.waits, 1, "the %s answering %q waited on %d Hetzner actions", a.op, a.detail, a.waits)
 	}
-	assert.Zero(t, p.sleeps, "the handler slept inside a call, holding it open")
 }
 
 func TestSubscribe_EachCallCreatesOneNodeAtMost(t *testing.T) {
