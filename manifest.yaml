@@ -22,9 +22,15 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.13
+  version: 0.3.14
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.14: the block builds on talos-cluster-kit v0.32.0. Argo CD posts
+    each Application's sync outcome to the platform's
+    /v1/gitops-notifications, with the URL and the notification token the
+    enrolment keeps in argocd-notifications-secret, so a block waiting on
+    Argo CD's verdict settles on this cluster. Talos creates each manifest
+    object once, so only a cluster built on 0.3.14 or later gains it.
     0.3.13: the block builds on block-kit v0.14.2, whose Robot package runs
     the worker's install, and on its rescuessh v0.1.0 module, which holds
     the rescue system's SSH session. The image server's user data and every
