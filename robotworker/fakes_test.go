@@ -7,10 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"io"
 	"net"
 	"net/netip"
@@ -20,16 +17,16 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot"
+	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh/rescuesshtest"
 	"github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/robottest"
 	"github.com/mitstack-eu/talos-cluster-kit/serve"
 	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v4"
-	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -42,25 +39,16 @@ const (
 var testSerials = map[string]string{testOtherDisk: "S675NF0WC35475", testDisk: "S675NF0WC35363"}
 
 // rescueHost admits a key only while Robot reads the server booted into its rescue with that key, and runs each
-// command with bash against fake disks and commands.
+// command with env against fake disks and commands. sent holds each command and its stdin once an install returned.
 type rescueHost struct {
-	robot  *robottest.Fake
-	number int64
-	signer ssh.Signer
-	addr   string
-	dev    string
-	tools  *testutil.Tools
-	env    []string
-
-	mu   sync.Mutex
-	sent []string
+	*rescuesshtest.Host
+	dev   string
+	tools *testutil.Tools
+	env   []string
+	sent  []string
 }
 
 func newRescueHost(t *testing.T, fake *robottest.Fake, number int64) *rescueHost {
-	_, private, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	signer, err := ssh.NewSignerFromKey(private)
-	require.NoError(t, err)
 	sys, dev := t.TempDir(), t.TempDir()
 	for name, serial := range testSerials {
 		writeFile(t, filepath.Join(sys, "block", name, "device", "serial"), serial+"\n")
@@ -75,71 +63,18 @@ func newRescueHost(t *testing.T, fake *robottest.Fake, number int64) *rescueHost
 		"ip":     `[ "$*" != "-o route show default" ] || echo "default via 203.0.113.1 dev eth0 proto static"`,
 		"wipefs": "", "sgdisk": "", "mdadm": "", "vgs": "", "vgchange": "",
 	})
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	t.Cleanup(func() { ln.Close() })
-	h := &rescueHost{robot: fake, number: number, signer: signer, addr: ln.Addr().String(), dev: dev, tools: tools,
+	host := rescuesshtest.New(t, func(key string) bool {
+		s := fake.State(number)
+		return s.Booted == "rescue" && slices.Contains(s.RescueKeys, key)
+	})
+	return &rescueHost{Host: host, dev: dev, tools: tools,
 		env: tools.Env("RESCUE_SYS="+sys, "RESCUE_DEV="+dev, "RESCUE_FETCH_INTERVAL=0.1", "RESCUE_FETCH_ATTEMPTS=100")}
-	config := &ssh.ServerConfig{PublicKeyCallback: h.admit}
-	config.AddHostKey(signer)
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go h.handle(conn, config)
-		}
-	}()
-	return h
 }
 
-func (h *rescueHost) admit(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	s := h.robot.State(h.number)
-	if s.Booted == "rescue" && slices.Contains(s.RescueKeys, strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key)))) {
-		return nil, nil
-	}
-	return nil, errors.New("this key is not admitted to the rescue system")
-}
-
-func (h *rescueHost) handle(conn net.Conn, config *ssh.ServerConfig) {
-	_, chans, reqs, err := ssh.NewServerConn(conn, config)
-	if err != nil {
-		conn.Close()
-		return
-	}
-	go ssh.DiscardRequests(reqs)
-	for nc := range chans {
-		ch, requests, err := nc.Accept()
-		if err != nil {
-			continue
-		}
-		go h.exec(ch, requests)
-	}
-}
-
-func (h *rescueHost) exec(ch ssh.Channel, requests <-chan *ssh.Request) {
-	defer ch.Close()
-	for req := range requests {
-		if req.Type != "exec" {
-			_ = req.Reply(false, nil)
-			continue
-		}
-		var command struct{ Command string }
-		_ = ssh.Unmarshal(req.Payload, &command)
-		_ = req.Reply(true, nil)
-		var stdin bytes.Buffer
-		cmd := exec.Command("bash", "-c", command.Command)
-		cmd.Env, cmd.Stdin, cmd.Stdout, cmd.Stderr = h.env, io.TeeReader(ch, &stdin), ch, ch.Stderr()
-		status := 0
-		if err := cmd.Run(); err != nil {
-			status = 1
-		}
-		h.mu.Lock()
-		h.sent = append(h.sent, command.Command, stdin.String())
-		h.mu.Unlock()
-		_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{uint32(status)}))
-		return
+func (h *rescueHost) record() {
+	h.sent = nil
+	for _, c := range h.Sent() {
+		h.sent = append(h.sent, c.Line, c.Stdin)
 	}
 }
 
@@ -155,7 +90,7 @@ type fakeCloud struct {
 	t        *testing.T
 	otherKey bool
 	silent   bool
-	created  []ImageServer
+	created  []robot.ShortLivedServer
 	deleted  []int64
 	image    string
 	dir      string
@@ -163,7 +98,7 @@ type fakeCloud struct {
 	exited   chan struct{}
 }
 
-func (c *fakeCloud) CreateImageServer(_ context.Context, s ImageServer) (int64, error) {
+func (c *fakeCloud) CreateServer(_ context.Context, s robot.ShortLivedServer) (int64, error) {
 	c.created = append(c.created, s)
 	files := userDataFiles(c.t, s.UserData)
 	c.dir = c.t.TempDir()
@@ -188,12 +123,12 @@ func (c *fakeCloud) CreateImageServer(_ context.Context, s ImageServer) (int64, 
 	return int64(len(c.created)), nil
 }
 
-func (c *fakeCloud) ImageServerAddress(context.Context, int64) (netip.Addr, error) {
+func (c *fakeCloud) ServerAddress(context.Context, int64) (netip.Addr, error) {
 	return netip.MustParseAddr("127.0.0.1"), nil
 }
 
-// DeleteImageServer gives the serve program a moment to exit on its own once it served, before it stops it.
-func (c *fakeCloud) DeleteImageServer(_ context.Context, id int64) error {
+// DeleteServer gives the serve program a moment to exit on its own once it served, before it stops it.
+func (c *fakeCloud) DeleteServer(_ context.Context, id int64) error {
 	c.deleted = append(c.deleted, id)
 	if c.serve == nil {
 		return nil
