@@ -563,7 +563,6 @@ type engine struct {
 	h      http.Handler
 	signer *kittest.Signer
 	seq    int
-	sleeps int
 	posted []answer
 }
 
@@ -597,7 +596,6 @@ func (e *env) engine() *engine {
 	p := &engine{e: e, signer: kittest.NewSigner(e.t, "kid-hcloud-hrobot-talos-cluster", 41)}
 	cfg := handlerConfig(p.signer.JWKSServer(e.t), nil)
 	cfg.Resource = e.block
-	cfg.Sleep = func(context.Context, time.Duration) { p.sleeps++ }
 	h, err := handler.New(cfg)
 	require.NoError(e.t, err)
 	p.h, e.eng = h, p

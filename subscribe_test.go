@@ -59,6 +59,18 @@ func TestSubscribe_BuildsTheCloudControlPlaneAndInstallsTheRobotServerAsItsWorke
 	assert.Equal(t, []int64{network.ID}, e.cloud.SpecFor(t, roleImageServer).NetworkIDs, "the image server's networks")
 }
 
+func TestSubscribe_TheGatewayMirrorsThePostgres16ImagePostgresDBKubePins(t *testing.T) {
+	e := newEnv(t)
+
+	obs := e.subscribe()
+
+	require.Equal(t, contract.Present, obs.State, "detail: %s", obs.StatusDetail)
+	userData := e.cloud.SpecFor(t, controlplane.RoleGateway).UserData
+	assert.True(t, strings.Contains(userData, "ghcr.io/cloudnative-pg/postgresql:16.15-system-trixie@sha256:8ca5699981c25db72e549e9fa69561bac233df15b9b1e3a6282847b0629bb5ea\n"),
+		"the gateway's mirror list lacks the Postgres 16.15 image")
+	assert.False(t, strings.Contains(userData, "postgresql:18.6"), "the gateway's mirror list holds a Postgres 18.6 image")
+}
+
 func TestSubscribe_TheImageServerWaitsForTheGatewayToHoldItsAddress(t *testing.T) {
 	e := newEnv(t)
 	e.cloud.InstantBuild = true
