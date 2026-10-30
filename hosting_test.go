@@ -57,26 +57,68 @@ type cloudFile struct {
 	Path, Content, Encoding string
 }
 
-// servedHosting is the hosting set the serving server holds, as configuration documents.
-func servedHosting(t *testing.T, e *env) []map[string]any {
+// zippedFile is the gzipped file a cloud-config writes at a path ending in suffix, unzipped.
+func zippedFile(t *testing.T, userData, suffix string) []byte {
 	t.Helper()
 	var config struct {
 		WriteFiles []cloudFile `yaml:"write_files"`
 	}
-	require.NoError(t, yaml.Unmarshal([]byte(strings.TrimPrefix(e.cloud.SpecFor(t, controlplane.RoleServing).UserData, "#cloud-config\n")), &config))
+	require.NoError(t, yaml.Unmarshal([]byte(strings.TrimPrefix(userData, "#cloud-config\n")), &config))
 	for _, f := range config.WriteFiles {
-		if strings.HasSuffix(f.Path, "/hosting.yaml") {
+		if strings.HasSuffix(f.Path, suffix) {
 			zipped, err := base64.StdEncoding.DecodeString(f.Content)
 			require.NoError(t, err)
 			r, err := gzip.NewReader(bytes.NewReader(zipped))
 			require.NoError(t, err)
 			plain, err := io.ReadAll(r)
 			require.NoError(t, err)
-			return testutil.Documents(t, plain)
+			return plain
 		}
 	}
-	require.FailNow(t, "the serving server holds no hosting set")
+	require.FailNow(t, "the user data writes no file ending in "+suffix)
 	return nil
+}
+
+// servedHosting is the hosting set the serving server holds, as configuration documents.
+func servedHosting(t *testing.T, e *env) []map[string]any {
+	t.Helper()
+	return testutil.Documents(t, zippedFile(t, e.cloud.SpecFor(t, controlplane.RoleServing).UserData, "/hosting.yaml"))
+}
+
+func TestSubscribe_ArgoCDOnAHostingClusterPostsItsVerdictsToThePlatformWithTheEnrolmentsToken(t *testing.T) {
+	e := newEnv(t, hostingCluster)
+
+	obs := e.hostingSubscribe()
+
+	require.Equal(t, contract.Present, obs.State, "detail: %s", obs.StatusDetail)
+	var writable []any
+	for _, doc := range testutil.Kind(testutil.Documents(t, zippedFile(t, e.cloud.SpecFor(t, controlplane.RoleBuilder).UserData, "/config.yaml")), "KubeInlineManifestConfig") {
+		if testutil.ManifestName(doc["name"].(string)) != "mitstack-cluster-tokens" {
+			continue
+		}
+		for _, role := range testutil.Kind(testutil.Documents(t, []byte(doc["manifest"].(string))), "Role") {
+			if testutil.Field(t, role, "metadata", "namespace") != "argocd" {
+				continue
+			}
+			for _, rule := range testutil.Field(t, role, "rules").([]any) {
+				names, _ := rule.(map[string]any)["resourceNames"].([]any)
+				writable = append(writable, names...)
+			}
+		}
+	}
+	assert.Equal(t, []any{"argocd-notifications-secret"}, writable, "the Secrets the enrolment may write in argocd")
+	argocd := testutil.Manifest(t, "argocd", components.Default().Served)
+	assert.Contains(t, e.cloud.SpecFor(t, controlplane.RoleGateway).UserData, argocd.TalosName()+".yaml "+argocd.SHA256()+" ", "the Argo CD the gateway serves")
+	var service struct {
+		URL string `yaml:"url"`
+	}
+	for _, cm := range testutil.Kind(testutil.Documents(t, argocd.Bytes), "ConfigMap") {
+		if testutil.Field(t, cm, "metadata", "name") == "argocd-notifications-cm" {
+			webhook, _ := testutil.Field(t, cm, "data", "service.webhook.mitstack").(string)
+			require.NoError(t, yaml.Unmarshal([]byte(webhook), &service))
+		}
+	}
+	assert.Equal(t, "$platform-url/v1/gitops-notifications", service.URL, "where the served Argo CD posts its verdicts")
 }
 
 // openedDeployKeys opens the hosting set's two SealedSecrets with the Sealed Secrets key the recipient decrypts.
