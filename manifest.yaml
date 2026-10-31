@@ -16,15 +16,18 @@
 # their names. Unsubscribe deletes every Cloud resource and the repository,
 # cancels the vSwitch, and releases the server without cancelling it.
 apiVersion: mitstack/v1beta
-type: capability
+type: block
 metadata:
   id: hcloud-hrobot-talos-cluster
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.14
+  version: 0.3.15
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.15: the manifest declares type block, since the cluster serves one
+    app, so the platform lists it in the block catalogue and never as a
+    capability. The operator and every resource it builds are unchanged.
     0.3.14: the block builds on talos-cluster-kit v0.32.0. Argo CD posts
     each Application's sync outcome to the platform's
     /v1/gitops-notifications, with the URL and the notification token the
