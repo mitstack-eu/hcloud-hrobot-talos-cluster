@@ -19,6 +19,7 @@ import (
 )
 
 type parsedManifest struct {
+	Type     string              `yaml:"type"`
 	Metadata struct{ ID string } `yaml:"metadata"`
 	Spec     struct {
 		Description string   `yaml:"description"`
@@ -57,6 +58,7 @@ func TestManifest_ProvidesTheKubernetesClusterType(t *testing.T) {
 	declared, observed := m.declaredTypes(), observers()
 
 	assert.Equal(t, "hcloud-hrobot-talos-cluster", m.Metadata.ID)
+	assert.Equal(t, "block", m.Type, "a cluster for one app is a block, never a capability")
 	assert.Equal(t, []string{"hetzner.kubernetes-cluster"}, m.Spec.Provides)
 	for name := range declared {
 		assert.Contains(t, observed, name, "the declared resource %s has no observer", name)
