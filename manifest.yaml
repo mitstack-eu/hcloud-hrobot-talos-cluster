@@ -22,9 +22,12 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.15
+  version: 0.3.16
   releaseClass: correctness-fix
   releaseNote: >-
+    0.3.16: hcloud-hrobot-talos-cluster 0.3.16 runs as uid and gid 10001 with
+    HOME at /tmp, so it starts under kube-app-deploy's pod security, and
+    answers /healthz from block-kit's helpers/healthz handler.
     0.3.15: the manifest declares type block, since the cluster serves one
     app, so the platform lists it in the block catalogue and never as a
     capability. The operator and every resource it builds are unchanged.

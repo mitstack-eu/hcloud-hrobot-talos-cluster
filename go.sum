@@ -81,6 +81,8 @@ github.com/mitstack-eu/block-kit v0.14.2 h1:oYN9zoRfJGKScrvaDBCvaslzhn6/1Mp9m1oM
 github.com/mitstack-eu/block-kit v0.14.2/go.mod h1:DyGLwiQsjXkIoJeRqkqsg6P4oLaWbGiE9v+N31R446A=
 github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh v0.1.0 h1:ll1Mn9RqbQqXLYfxqDjwFClqT2XAuSyH6ywRqQ7EfuA=
 github.com/mitstack-eu/block-kit/capabilities/hetzner/robot/rescuessh v0.1.0/go.mod h1:LZZ/5CsJkJ6BQczmnDA5Pb4+tu1iLzI7YiMmaQsDo34=
+github.com/mitstack-eu/block-kit/helpers/healthz v0.1.0 h1:NqA7atjz+PgLTSuZbVt8GY1lHpo5zqADbuyh48gmJag=
+github.com/mitstack-eu/block-kit/helpers/healthz v0.1.0/go.mod h1:RXrs0h02sbyXAax0+KjR+FPV2GTfX6WuCQ/hmTM7Xl8=
 github.com/mitstack-eu/talos-cluster-kit v0.32.0 h1:LU5M7uny+7km87GWunE9w5gMAztCs1zFmVb/FQycQ/Y=
 github.com/mitstack-eu/talos-cluster-kit v0.32.0/go.mod h1:MyXiGl5YjYNctpTi6teL23TAAfjLcigjNOYXidKzbwg=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
