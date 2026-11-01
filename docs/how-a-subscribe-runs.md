@@ -130,7 +130,11 @@ hcloud-hrobot-talos-cluster: subscription sub_0123456789ab: the step to create t
 ```
 
 An upgrade request, which moves a subscription to a newer release of the
-block, adds whatever is missing and never replaces a server.
+block, adds whatever is missing and never replaces a server. On a cluster that
+hosts mitstack it also commits the release's hosting policies for Argo CD to
+apply, which
+[How an upgrade changes the hosting policies](hosting-the-platform.md#how-an-upgrade-changes-the-hosting-policies)
+covers.
 [Build progress and failures](build-progress-and-failures.md) covers a slow or
 failed build and every refusal a subscribe can end in.
 
