@@ -125,14 +125,20 @@ func lastCreated(servers []controlplane.Server) time.Time {
 	return last
 }
 
-// newestReportSince returns the nodes of the newest report received after since, or nil when there is none.
-func newestReportSince(reports []observe.NodeReport, since time.Time) ([]reportedNode, error) {
+// newestReport is the newest report received after since, or nil when there is none.
+func newestReport(reports []observe.NodeReport, since time.Time) *observe.NodeReport {
 	var newest *observe.NodeReport
 	for i, r := range reports {
 		if r.ReceivedAt.After(since) && (newest == nil || r.ReceivedAt.After(newest.ReceivedAt)) {
 			newest = &reports[i]
 		}
 	}
+	return newest
+}
+
+// newestReportSince returns the nodes of the newest report received after since, or nil when there is none.
+func newestReportSince(reports []observe.NodeReport, since time.Time) ([]reportedNode, error) {
+	newest := newestReport(reports, since)
 	if newest == nil {
 		return nil, nil
 	}

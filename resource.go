@@ -16,6 +16,7 @@ import (
 	"github.com/mitstack-eu/block-kit/handler"
 	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 	"github.com/mitstack-eu/talos-cluster-kit/nodeconfig"
+	"github.com/mitstack-eu/talos-cluster-kit/rollout"
 	"github.com/mitstack-eu/talos-cluster-kit/tools"
 )
 
@@ -224,6 +225,11 @@ func ensure(ctx context.Context, d contract.Desired) error {
 	}
 	if err := ensureRepository(ctx, c); err != nil {
 		return err
+	}
+	if req.params.hosting {
+		if err := req.gh.rollOut(ctx, rollout.Current()); err != nil {
+			return err
+		}
 	}
 	s, ok, err := c.nextStep(ctx, network)
 	if err != nil || !ok {

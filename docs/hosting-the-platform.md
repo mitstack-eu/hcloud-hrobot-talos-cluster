@@ -107,6 +107,41 @@ gh api repos/acme/shop-cluster/contents/openbao-seal-key.asc --jq .content \
   | base64 -d | gpg --decrypt | base64 -d > openbao-seal.key
 ```
 
+## How an upgrade changes the hosting policies
+
+The hosting policies are the Cilium network policies that say where the
+hosting cluster's stores may connect, such as External Secrets reaching AWS
+SSM on 443. Talos creates each manifest it serves once and never changes it
+afterwards, so a release that changes a policy would never reach a running
+cluster through Talos. The block therefore hands the policies to the
+cluster's Argo CD, which changes each one a release changes and deletes each
+one a release drops.
+
+Each subscribe or upgrade of a hosting cluster commits two files from the
+kit's `rollout` package, in this order, and only when the repository does not
+already hold them as the release states them:
+
+| File | What it holds |
+|---|---|
+| `hosting/policies.yaml` | The release's hosting policies, and a ConfigMap `argocd/mitstack-hosting-<digest>` named for them |
+| `cluster/mitstack-hosting.yaml` | The Argo CD Application `mitstack-hosting`, which applies `hosting/` and deletes what the folder drops |
+
+`rollOut` in `rollout.go` commits them. The cluster's own Application applies
+`cluster/`, so it creates `mitstack-hosting`, which then applies the policies.
+
+The upgrade settles once the newest node report reads the release back. The
+report must list `mitstack-hosting` as Synced and Healthy, with exactly the
+objects the release states, each Synced. Until then the cluster reads unknown
+with the reason, such as `the newest node report lists no Argo CD Application
+mitstack-hosting`. The ConfigMap's name changes with every change to the
+policies, so a report made before Argo CD saw the change does not read it
+back. `readBack` in `rollout.go` makes this check.
+
+A cluster whose repository holds no policies, or an earlier release's, reads
+as it did before the upgrade, and a validate commits nothing. The policies
+reach a running cluster only through an upgrade or a subscribe, and they never
+touch a server or a Robot resource.
+
 ## Where the stores run
 
 A hosting cluster keeps OpenBao's data on the Cloud nodes and runs everything

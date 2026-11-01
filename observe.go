@@ -11,6 +11,7 @@ import (
 	"github.com/mitstack-eu/block-kit/contract"
 	"github.com/mitstack-eu/block-kit/handler"
 	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
+	"github.com/mitstack-eu/talos-cluster-kit/rollout"
 )
 
 // observers judge every declared resource by the labels, names and topics it carries, never by a recorded identity,
@@ -215,7 +216,8 @@ func hetznerReader(d contract.Desired) (controlplane.Plane, contract.Observation
 }
 
 // Observe reads the whole cluster: present once the control plane stands as the block makes it, the worker is written
-// and the newest node report since the last node's creation reads every node Ready, the worker among them; absent when
+// and the newest node report since the last node's creation reads every node Ready, the worker among them, and on a
+// hosting cluster whose repository holds this release's policies, the newest report reads each one back; absent when
 // no labelled resource or marked repository is left; unknown, naming what is missing, in between.
 func (r *blockResource) Observe(ctx context.Context, d contract.Desired) (contract.Observation, error) {
 	return observeCluster(ctx, d)
@@ -262,6 +264,16 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 			problems = append(problems, gap)
 		}
 	}
+	var hosting string
+	if len(problems) == 0 && hostsPlatform(d) {
+		var problem string
+		if hosting, problem, err = repo.gh.readBack(ctx, d, rollout.Current()); err != nil {
+			return contract.Observation{}, err
+		}
+		if problem != "" {
+			problems = append(problems, problem)
+		}
+	}
 	redrive, err := stepLeft(ctx, d, st, installing, repo)
 	if errors.Is(err, robot.ErrRateLimited) {
 		problems = append(problems, robotLimitDetail)
@@ -283,11 +295,11 @@ func observeCluster(ctx context.Context, d contract.Desired) (contract.Observati
 	outputs, detail := p.Outputs(st)
 	outputs["clusterRepoUrl"] = repo.url
 	maps.Copy(outputs, recovery)
-	return contract.Observation{
-		State:        contract.Present,
-		Outputs:      outputs,
-		StatusDetail: detail + ", the Robot worker is written, and the newest node report reads every node Ready",
-	}, nil
+	detail += ", the Robot worker is written, and the newest node report reads every node Ready"
+	if hosting != "" {
+		detail += ", and " + hosting
+	}
+	return contract.Observation{State: contract.Present, Outputs: outputs, StatusDetail: detail}, nil
 }
 
 func workerDetail(network controlplane.Network) string {

@@ -22,9 +22,16 @@ metadata:
   name: Hetzner Cloud and Robot Talos cluster
   owner: mitstack
 spec:
-  version: 0.3.16
-  releaseClass: correctness-fix
+  version: 0.3.17
+  releaseClass: feature
   releaseNote: >-
+    0.3.17: the block builds on talos-cluster-kit v0.33.0. On a cluster that
+    hosts mitstack, a subscribe or an upgrade commits the release's hosting
+    policies to hosting/policies.yaml and the Argo CD Application
+    mitstack-hosting to cluster/, and settles once the node report reads
+    each policy back. Argo CD applies them, so a running cluster gains the
+    policy that lets External Secrets reach AWS SSM on 443. The upgrade
+    changes no server and no Robot resource.
     0.3.16: hcloud-hrobot-talos-cluster 0.3.16 runs as uid and gid 10001 with
     HOME at /tmp, so it starts under kube-app-deploy's pod security, and
     answers /healthz from block-kit's helpers/healthz handler.

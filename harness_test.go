@@ -28,8 +28,10 @@ import (
 	"github.com/mitstack-eu/block-kit/verify/kittest"
 	"github.com/mitstack-eu/block-kit/webhook"
 	"github.com/mitstack-eu/hcloud-hrobot-talos-cluster/robotworker"
+	"github.com/mitstack-eu/talos-cluster-kit/components"
 	"github.com/mitstack-eu/talos-cluster-kit/controlplane"
 	"github.com/mitstack-eu/talos-cluster-kit/controlplane/cloudtest"
+	"github.com/mitstack-eu/talos-cluster-kit/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,10 +50,29 @@ var testStart = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
 
 type fakeReports struct {
 	reports []observe.NodeReport
+	// argocd is the cluster's Argo CD as each report reads it.
+	argocd func() json.RawMessage
 }
 
 func (f *fakeReports) NodeReports(context.Context, contract.Desired, string) ([]observe.NodeReport, error) {
-	return f.reports, nil
+	if f.argocd == nil {
+		return f.reports, nil
+	}
+	out := make([]observe.NodeReport, 0, len(f.reports))
+	for _, r := range f.reports {
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(r.Body, &body); err != nil {
+			return nil, err
+		}
+		var argocd struct{ ArgoCD json.RawMessage }
+		if err := json.Unmarshal(f.argocd(), &argocd); err != nil {
+			return nil, err
+		}
+		body["argocd"] = argocd.ArgoCD
+		r.Body, _ = json.Marshal(body)
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 // report adds a node report received at at, naming each node with its readiness.
@@ -91,6 +112,10 @@ type env struct {
 	buildTakes, imageTakes time.Duration
 	// quietNode holds back the nodes' report, so the cluster waits on it.
 	quietNode bool
+	// argo is the running cluster's API and Argo CD, which syncs the repository while the platform waits unless
+	// argoBehind holds it back.
+	argo       *testutil.Cluster
+	argoBehind bool
 	eng       *engine
 
 	mu sync.Mutex
@@ -119,6 +144,8 @@ func newEnv(t *testing.T, opts ...envOption) *env {
 	e.robot = robottest.New(t)
 	e.robot.AddServer(robottest.Server{Number: testRobotServer, IP: "203.0.113.50", DC: "HEL1-DC2"})
 	e.github = newFakeGitHub(t)
+	e.argo = testutil.BuildCluster(t, components.HostingPolicies()[0].Bytes)
+	e.reports.argocd = func() json.RawMessage { return e.argo.Report() }
 	for _, opt := range opts {
 		opt(e)
 	}
@@ -338,10 +365,29 @@ func (e *env) observe() contract.Observation {
 func (e *env) progress() {
 	e.cloud.Advance(e.buildTakes, e.imageTakes)
 	e.runJobs()
+	e.syncArgo()
 	written := len(e.installed()) > 0 && e.installErr == nil
 	if !e.quietNode && written && len(e.byRole(controlplane.RoleNode)) == len(controlplane.Locations) && len(e.reports.reports) == 0 {
 		e.reports.report(e.now, everyNode()...)
 	}
+}
+
+// syncArgo has Argo CD sync what the cluster repository holds, unless argoBehind holds it back.
+func (e *env) syncArgo() {
+	if e.argoBehind {
+		return
+	}
+	prefix := e.repo() + "/contents/"
+	files := map[string][]byte{}
+	e.github.mu.Lock()
+	for path, content := range e.github.files {
+		if name, ok := strings.CutPrefix(path, prefix); ok {
+			files[name] = []byte(content)
+		}
+	}
+	e.github.mu.Unlock()
+	e.argo.Commit(files)
+	e.argo.Sync()
 }
 
 // building reports whether the builder runs its build, the long step the engine's re-drive resumes after.
@@ -385,6 +431,8 @@ type fakeGitHub struct {
 	nextKey int64
 	server  *httptest.Server
 	writes  int
+	// puts is each path a contents write named, in order.
+	puts []string
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -459,6 +507,7 @@ func (gh *fakeGitHub) serveContents(w http.ResponseWriter, r *http.Request, path
 		}
 		decoded, _ := base64.StdEncoding.DecodeString(body.Content)
 		gh.files[path] = string(decoded)
+		gh.puts = append(gh.puts, path)
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
