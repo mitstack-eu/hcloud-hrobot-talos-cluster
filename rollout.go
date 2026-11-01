@@ -10,9 +10,8 @@ import (
 	"github.com/mitstack-eu/talos-cluster-kit/rollout"
 )
 
-// rollOut commits each file of the release the cluster repository does not hold as stated, the policies before the
-// Application that prunes what they drop, so Argo CD applies a running cluster's hosting policies, which Talos never
-// re-applies once it created them.
+// rollOut commits each release file the repository does not hold as stated, for Argo CD to apply, since Talos never
+// re-applies a manifest it created.
 func (g *githubAccess) rollOut(ctx context.Context, release rollout.Release) error {
 	files, err := release.Files(g.repo.fullName())
 	if err != nil {
@@ -33,9 +32,8 @@ func (g *githubAccess) rollOut(ctx context.Context, release rollout.Release) err
 	return nil
 }
 
-// readBack reads the release back from the newest node report once the repository holds its files, returning what
-// it read back or the problem. A repository holding another release's files, or none, reads nothing back and no
-// problem, since only an upgrade replaces them.
+// readBack judges only a repository holding the release's files, so a cluster on an earlier release reads as before
+// until an upgrade.
 func (g *githubAccess) readBack(ctx context.Context, d contract.Desired, release rollout.Release) (applied, problem string, err error) {
 	files, err := release.Files(g.repo.fullName())
 	if err != nil {
